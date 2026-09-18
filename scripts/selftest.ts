@@ -1,7 +1,8 @@
 /**
  * Integration check for the run + git-snapshot pipeline (no pytest needed).
  * Seeds a temp project whose "test command" just emits JUnit + Cobertura XML,
- * runs it through runProject(), and asserts a run row + a commit in the repo.
+ * runs it through runProject(), and asserts a run row + a commit landed in
+ * the project's own repo, scoped to .skuld/ only.
  *
  *   bun scripts/selftest.ts
  */
@@ -15,12 +16,12 @@ const work = mkdtempSync(join(tmpdir(), "skuld-selftest-"));
 process.env.SKULD_DB = join(work, "test.db");
 
 const proj = join(work, "sample");
-const repo = join(work, "history");
 mkdirSync(proj);
-mkdirSync(repo);
-execFileSync("git", ["-C", repo, "init", "-q"]);
-execFileSync("git", ["-C", repo, "config", "user.email", "t@t"]);
-execFileSync("git", ["-C", repo, "config", "user.name", "t"]);
+execFileSync("git", ["-C", proj, "init", "-q"]);
+execFileSync("git", ["-C", proj, "config", "user.email", "t@t"]);
+execFileSync("git", ["-C", proj, "config", "user.name", "t"]);
+// an unrelated in-progress change that must NOT get swept into the snapshot commit
+writeFileSync(join(proj, "wip.txt"), "not skuld's business\n");
 
 const JUNIT = `<testsuites><testsuite name="s" tests="2">
 <testcase classname="tests.test_auth" name="test_login" time="0.01"/>
@@ -47,7 +48,6 @@ exit 1
 const { db } = await import("../lib/db");
 const { runProject } = await import("../lib/run");
 
-db.prepare("UPDATE settings SET coverage_repo_dir = ?, git_push = 0 WHERE id = 1").run(repo);
 const info = db
   .prepare(
     "INSERT INTO projects (name, root_dir, test_command, junit_path, coverage_xml_path) VALUES (?,?,?,?,?)",
@@ -68,8 +68,17 @@ assert.equal(run.git_status, "committed", "git status");
 const tests = db.prepare("SELECT COUNT(*) c FROM discovered_tests WHERE run_id = ?").get(run.id) as any;
 assert.equal(tests.c, 2, "discovered rows");
 
-const log = execFileSync("git", ["-C", repo, "log", "--oneline"], { encoding: "utf8" });
-assert.match(log, /coverage: sample/, "commit message");
+const log = execFileSync("git", ["-C", proj, "log", "--oneline"], { encoding: "utf8" });
+assert.match(log, /skuld:/, "commit message");
+
+const committed = execFileSync("git", ["-C", proj, "show", "--stat", "--oneline", "HEAD"], {
+  encoding: "utf8",
+});
+assert.match(committed, /\.skuld\/history\//, "history files committed");
+assert.doesNotMatch(committed, /wip\.txt/, "unrelated wip file must not be swept into the commit");
+
+const status = execFileSync("git", ["-C", proj, "status", "--porcelain"], { encoding: "utf8" });
+assert.match(status, /wip\.txt/, "unrelated wip file should remain uncommitted");
 
 rmSync(work, { recursive: true, force: true });
-console.log("selftest OK — run recorded, snapshot committed");
+console.log("selftest OK — run recorded, snapshot committed to project's own repo");

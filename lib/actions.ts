@@ -12,14 +12,6 @@ function int(fd: FormData, k: string): number {
   return Number(fd.get(k) ?? 0);
 }
 
-export async function saveSettings(fd: FormData) {
-  db.prepare("UPDATE settings SET coverage_repo_dir = ?, git_push = ? WHERE id = 1").run(
-    str(fd, "coverage_repo_dir"),
-    fd.get("git_push") ? 1 : 0,
-  );
-  revalidatePath("/");
-}
-
 export async function createProject(fd: FormData) {
   const name = str(fd, "name");
   const root_dir = str(fd, "root_dir");
@@ -44,13 +36,14 @@ export async function createProject(fd: FormData) {
 export async function updateProject(fd: FormData) {
   const id = int(fd, "id");
   db.prepare(
-    `UPDATE projects SET name = ?, root_dir = ?, test_command = ?, junit_path = ?, coverage_xml_path = ? WHERE id = ?`,
+    `UPDATE projects SET name = ?, root_dir = ?, test_command = ?, junit_path = ?, coverage_xml_path = ?, git_push = ? WHERE id = ?`,
   ).run(
     str(fd, "name"),
     str(fd, "root_dir"),
     str(fd, "test_command"),
     str(fd, "junit_path") || ".skuld/junit.xml",
     str(fd, "coverage_xml_path") || ".skuld/coverage.xml",
+    fd.get("git_push") ? 1 : 0,
     id,
   );
   revalidatePath(`/projects/${id}`);

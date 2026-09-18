@@ -1,8 +1,7 @@
 import Link from "next/link";
-import { listProjects, latestRun, getSettings } from "@/lib/db";
+import { listProjects, latestRun } from "@/lib/db";
 import { AddProjectDialog } from "@/components/add-project-dialog";
 import { RunButton } from "@/components/run-button";
-import { saveSettings } from "@/lib/actions";
 import {
   Card,
   CardContent,
@@ -10,10 +9,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 
 export const dynamic = "force-dynamic";
 
@@ -23,38 +18,54 @@ function pct(n: number) {
 
 export default function Home() {
   const projects = listProjects();
-  const settings = getSettings();
 
   return (
     <div className="grid gap-8">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Projects</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-xl font-semibold text-balance">Projects</h1>
         <AddProjectDialog />
       </div>
 
       {projects.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No projects yet. Add one to get started.</p>
+        <div className="grid place-items-center gap-2 rounded-xl border border-dashed p-10 text-center">
+          <p className="text-sm text-muted-foreground">No projects yet. Add one to get started.</p>
+          <AddProjectDialog />
+        </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
           {projects.map((p) => {
             const r = latestRun(p.id);
             return (
-              <Card key={p.id}>
+              <Card
+                key={p.id}
+                className="transition-shadow hover:shadow-md focus-within:shadow-md"
+              >
                 <CardHeader>
-                  <CardTitle>
-                    <Link href={`/projects/${p.id}`} className="hover:underline">
+                  <CardTitle className="min-w-0">
+                    <Link
+                      href={`/projects/${p.id}`}
+                      className="rounded-sm underline-offset-2 hover:underline focus-visible:underline focus-visible:outline-none"
+                    >
                       {p.name}
                     </Link>
                   </CardTitle>
-                  <CardDescription className="truncate">{p.root_dir}</CardDescription>
+                  <CardDescription className="truncate" title={p.root_dir}>
+                    {p.root_dir}
+                  </CardDescription>
                 </CardHeader>
-                <CardContent className="flex items-center justify-between">
-                  <div className="text-sm text-muted-foreground">
+                <CardContent className="flex items-center justify-between gap-3">
+                  <div className="min-w-0 text-sm text-muted-foreground">
                     {r ? (
                       <>
-                        <span className="text-foreground font-medium">{pct(r.line_rate)}</span> lines ·{" "}
-                        {r.passed}/{r.total} pass
-                        {r.failed > 0 && <span className="text-destructive"> · {r.failed} failing</span>}
+                        <span className="font-medium tabular-nums text-foreground">{pct(r.line_rate)}</span>{" "}
+                        lines ·{" "}
+                        <span className="tabular-nums">
+                          {r.passed}/{r.total}
+                        </span>{" "}
+                        pass
+                        {r.failed > 0 && (
+                          <span className="text-destructive"> · {r.failed} failing</span>
+                        )}
                         <br />
                         <span className="text-xs">
                           {new Date(r.finished_at).toLocaleString()} · git {r.git_status}
@@ -71,51 +82,6 @@ export default function Home() {
           })}
         </div>
       )}
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Coverage repo</CardTitle>
-          <CardDescription>
-            Every run writes a snapshot here, commits it, and (optionally) pushes — version history of your
-            tests. Pre-clone the repo with a working <code>origin</code> and credentials.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form action={saveSettings} className="flex flex-wrap items-end gap-3">
-            <div className="grid gap-1.5">
-              <Label htmlFor="coverage_repo_dir">Repo directory (absolute)</Label>
-              <Input
-                id="coverage_repo_dir"
-                name="coverage_repo_dir"
-                defaultValue={settings.coverage_repo_dir}
-                placeholder="/home/me/repos/coverage-history"
-                className="w-96 max-w-full"
-              />
-            </div>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                name="git_push"
-                defaultChecked={settings.git_push === 1}
-                className="size-4"
-              />
-              git push after commit
-            </label>
-            <Button type="submit" variant="secondary">
-              Save
-            </Button>
-          </form>
-          {settings.coverage_repo_dir ? (
-            <Badge variant="secondary" className="mt-3">
-              snapshots → {settings.coverage_repo_dir}
-            </Badge>
-          ) : (
-            <Badge variant="outline" className="mt-3">
-              not configured — runs skip git
-            </Badge>
-          )}
-        </CardContent>
-      </Card>
     </div>
   );
 }

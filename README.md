@@ -14,18 +14,21 @@ SQLite lives in `./skuld.db` (override with `SKULD_DB`). Schema is created on fi
 
 ## Use
 
-1. **Coverage repo** (home page): point it at a pre-cloned git repo with a working
-   `origin` + credentials. Each run writes `<repo>/<project-slug>/<timestamp>.{json,junit.xml,coverage.xml}`,
-   commits, and pushes (toggle off to commit only).
-2. **Add project**: absolute path + a test command that emits **JUnit XML** and
+1. **Add project**: absolute path + a test command that emits **JUnit XML** and
    **Cobertura `coverage.xml`**. For pytest:
    `pytest --junitxml=.skuld/junit.xml --cov --cov-report=xml:.skuld/coverage.xml`
-   Any framework works if it can produce those two files.
-3. **Run tests**: executes the command in the project dir, parses the reports, stores a
-   run, snapshots to the coverage repo.
-4. **Areas & roadmap**: group planned tests by feature area (Auth, Listing…), mark them
+   Any framework works if it can produce those two files. No account, no setup step —
+   just point it at a checkout.
+2. **Run tests**: executes the command in the project dir, parses the reports, stores a
+   run, then writes a timestamped snapshot to `<project>/.skuld/history/` and commits it
+   to *that project's own git repo* (scoped to `.skuld/` only — never touches other
+   uncommitted work). No separate coverage repo to configure. If the project directory
+   isn't a git repo, this step is skipped and the run still succeeds.
+   Enable "git push after commit" in a project's Settings tab to also push each snapshot
+   commit (off by default, since it uses that project's real `origin`).
+3. **Areas & roadmap**: group planned tests by feature area (Auth, Listing…), mark them
    done, link each to a real discovered test. The roadmap = everything still `todo`.
-5. **Overview**: line chart of coverage % and test count across all runs.
+4. **Overview**: line chart of coverage % and test count across all runs.
 
 ## Checks
 
@@ -38,4 +41,4 @@ bun scripts/selftest.ts      # run + git-snapshot pipeline (no pytest needed)
 
 - A run is a blocking server action (20-min exec timeout). Add a job queue if suites get slower.
 - planned↔discovered linking is manual.
-- `git push` relies on the coverage repo already having working auth.
+- `git push` relies on the project's own repo already having working `origin` auth.

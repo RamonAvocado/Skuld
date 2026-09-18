@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { join, isAbsolute } from "node:path";
-import { db, getProject, getSettings, type Project } from "./db";
+import { db, getProject, type Project } from "./db";
 import { parseJUnit, parseCobertura } from "./parse";
 
 const pexec = promisify(execFile);
@@ -31,10 +31,6 @@ async function git(repo: string, args: string[]): Promise<Sh> {
     const err = e as { code?: number; stdout?: string; stderr?: string; message?: string };
     return { code: err.code ?? 1, out: (err.stdout ?? "") + (err.stderr ?? "") + (err.message ?? "") };
   }
-}
-
-function slug(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "project";
 }
 
 function resolveIn(root: string, p: string): string {
@@ -151,11 +147,12 @@ async function snapshotToGit(
     coverageXml: string;
   },
 ): Promise<string> {
-  const { coverage_repo_dir, git_push } = getSettings();
-  if (!coverage_repo_dir) return "skipped";
+  const root = project.root_dir;
+  const isRepo = await git(root, ["rev-parse", "--is-inside-work-tree"]);
+  if (isRepo.code !== 0) return "not-a-repo";
 
   const stamp = d.started_at.replace(/[:.]/g, "-");
-  const dir = join(coverage_repo_dir, slug(project.name));
+  const dir = join(root, ".skuld", "history");
   try {
     await mkdir(dir, { recursive: true });
     await writeFile(
@@ -183,17 +180,19 @@ async function snapshotToGit(
     return "failed";
   }
 
-  const add = await git(coverage_repo_dir, ["add", "-A"]);
+  // scoped to .skuld only — never -A, so unrelated uncommitted work in the
+  // project's own repo is never swept into a Skuld snapshot commit.
+  const add = await git(root, ["add", "--", ".skuld"]);
   if (add.code !== 0) return "failed";
-  const commit = await git(coverage_repo_dir, [
+  const commit = await git(root, [
     "commit",
     "-m",
-    `coverage: ${project.name} ${d.started_at} (${d.junit.passed}/${d.junit.total} pass, ${(d.coverage.lineRate * 100).toFixed(1)}% lines)`,
+    `skuld: ${d.started_at} (${d.junit.passed}/${d.junit.total} pass, ${(d.coverage.lineRate * 100).toFixed(1)}% lines)`,
   ]);
   if (commit.code !== 0 && !/nothing to commit/i.test(commit.out)) return "failed";
 
-  if (git_push) {
-    const push = await git(coverage_repo_dir, ["push"]);
+  if (project.git_push) {
+    const push = await git(root, ["push"]);
     return push.code === 0 ? "pushed" : "failed";
   }
   return "committed";

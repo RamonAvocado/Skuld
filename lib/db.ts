@@ -10,13 +10,6 @@ function open(): DatabaseSync {
   const db = new DatabaseSync(DB_PATH);
   db.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
   db.exec(`
-    CREATE TABLE IF NOT EXISTS settings (
-      id INTEGER PRIMARY KEY CHECK (id = 1),
-      coverage_repo_dir TEXT DEFAULT '',
-      git_push INTEGER DEFAULT 1
-    );
-    INSERT OR IGNORE INTO settings (id) VALUES (1);
-
     CREATE TABLE IF NOT EXISTS projects (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -24,6 +17,7 @@ function open(): DatabaseSync {
       test_command TEXT NOT NULL,
       junit_path TEXT NOT NULL DEFAULT '.skuld/junit.xml',
       coverage_xml_path TEXT NOT NULL DEFAULT '.skuld/coverage.xml',
+      git_push INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
@@ -81,6 +75,12 @@ function open(): DatabaseSync {
       lines_valid INTEGER NOT NULL DEFAULT 0
     );
   `);
+  // ponytail: no migration system — add columns introduced after first boot this way.
+  try {
+    db.exec("ALTER TABLE projects ADD COLUMN git_push INTEGER NOT NULL DEFAULT 0");
+  } catch {
+    /* column already exists */
+  }
   return db;
 }
 
@@ -95,6 +95,7 @@ export type Project = {
   test_command: string;
   junit_path: string;
   coverage_xml_path: string;
+  git_push: number;
   created_at: string;
 };
 
@@ -113,13 +114,6 @@ export type RunRow = {
   git_status: string;
   log: string;
 };
-
-export function getSettings() {
-  return db.prepare("SELECT coverage_repo_dir, git_push FROM settings WHERE id = 1").get() as {
-    coverage_repo_dir: string;
-    git_push: number;
-  };
-}
 
 export function listProjects(): Project[] {
   return db.prepare("SELECT * FROM projects ORDER BY name").all() as Project[];
