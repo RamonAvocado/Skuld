@@ -12,6 +12,8 @@ import {
   listAreas,
   plannedForArea,
   roadmap,
+  listSuites,
+  languageBreakdown,
 } from "@/lib/db";
 import {
   createArea,
@@ -22,7 +24,13 @@ import {
   deletePlannedTest,
   updateProject,
   deleteProject,
+  createSuite,
+  updateSuite,
+  deleteSuite,
 } from "@/lib/actions";
+import { LanguageBar } from "@/components/language-bar";
+import { SuiteFields } from "@/components/suite-fields";
+import { LAYERS } from "@/lib/presets";
 import { RunButton } from "@/components/run-button";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { EvolutionChart } from "@/components/evolution-chart";
@@ -45,7 +53,6 @@ import {
 
 export const dynamic = "force-dynamic";
 
-const LAYERS = ["unit", "integration", "e2e", "other"];
 const inputCls =
   "h-9 rounded-md border bg-background px-3 py-1 text-sm text-foreground shadow-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30";
 
@@ -72,6 +79,8 @@ export default async function ProjectPage({
   const areas = listAreas(projectId);
   const todo = roadmap(projectId);
   const discovered = last ? discoveredForRun(last.id) : [];
+  const suites = listSuites(projectId);
+  const langData = last ? languageBreakdown(last.id) : [];
 
   return (
     <div className="grid gap-6">
@@ -111,6 +120,14 @@ export default async function ProjectPage({
             />
             <Tile label="Roadmap left" value={String(todo.length)} />
           </div>
+          <Card>
+            <CardHeader>
+              <CardTitle>Test composition</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <LanguageBar data={langData} />
+            </CardContent>
+          </Card>
           <Card>
             <CardHeader>
               <CardTitle>Evolution</CardTitle>
@@ -156,6 +173,11 @@ export default async function ProjectPage({
                 <CardHeader className="flex-row items-center justify-between">
                   <CardTitle>
                     {area.name}{" "}
+                    {area.is_auto === 1 && (
+                      <Badge variant="outline" className="align-middle">
+                        auto
+                      </Badge>
+                    )}{" "}
                     <span className="text-sm font-normal text-muted-foreground">
                       {done}/{planned.length} done · {planned.length - done} left
                     </span>
@@ -167,7 +189,11 @@ export default async function ProjectPage({
                       variant="ghost"
                       size="sm"
                       type="submit"
-                      confirmMessage={`Delete area "${area.name}" and its planned tests? This can't be undone.`}
+                      confirmMessage={
+                        area.is_auto === 1
+                          ? `Delete "${area.name}"? It will be recreated automatically on the next run.`
+                          : `Delete area "${area.name}" and its planned tests? This can't be undone.`
+                      }
                     >
                       delete area
                     </ConfirmSubmitButton>
@@ -357,16 +383,6 @@ export default async function ProjectPage({
                 <input type="hidden" name="id" value={projectId} />
                 <Field name="name" label="Name" defaultValue={project.name} />
                 <Field name="root_dir" label="Project directory" defaultValue={project.root_dir} mono />
-                <Field name="test_command" label="Test command" defaultValue={project.test_command} mono />
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <Field name="junit_path" label="JUnit XML path" defaultValue={project.junit_path} mono />
-                  <Field
-                    name="coverage_xml_path"
-                    label="Coverage XML path"
-                    defaultValue={project.coverage_xml_path}
-                    mono
-                  />
-                </div>
                 <label className="flex w-fit cursor-pointer items-center gap-2 text-sm">
                   <Checkbox name="git_push" defaultChecked={project.git_push === 1} />
                   Git push after commit
@@ -381,6 +397,70 @@ export default async function ProjectPage({
               </form>
             </CardContent>
           </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Test suites</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-4">
+              {suites.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No suites configured — add one below to enable Run.</p>
+              ) : (
+                suites.map((suite) => (
+                  <details key={suite.id} className="rounded-lg border p-3">
+                    <summary className="flex cursor-pointer flex-wrap items-center gap-2 text-sm">
+                      <span className="font-medium">{suite.name || `${suite.language}/${suite.framework}`}</span>
+                      <Badge variant="secondary">{suite.language}</Badge>
+                      <Badge variant="secondary">{suite.framework}</Badge>
+                      <Badge variant="outline">{suite.layer}</Badge>
+                    </summary>
+                    <div className="mt-3 grid gap-3">
+                      <form action={updateSuite} className="grid gap-3">
+                        <input type="hidden" name="id" value={suite.id} />
+                        <input type="hidden" name="project_id" value={projectId} />
+                        <SuiteFields
+                          defaultName={suite.name}
+                          defaultLanguage={suite.language}
+                          defaultFramework={suite.framework}
+                          defaultLayer={suite.layer}
+                          defaultCommand={suite.test_command}
+                          defaultJunitPath={suite.junit_path}
+                          defaultCoveragePath={suite.coverage_xml_path}
+                        />
+                        <Button type="submit" size="sm" variant="secondary" className="w-fit">
+                          Save suite
+                        </Button>
+                      </form>
+                      <form action={deleteSuite}>
+                        <input type="hidden" name="id" value={suite.id} />
+                        <input type="hidden" name="project_id" value={projectId} />
+                        <ConfirmSubmitButton
+                          type="submit"
+                          size="sm"
+                          variant="ghost"
+                          confirmMessage={`Delete suite "${suite.name || suite.framework}"? Past results stay in run history.`}
+                        >
+                          Delete suite
+                        </ConfirmSubmitButton>
+                      </form>
+                    </div>
+                  </details>
+                ))
+              )}
+
+              <details className="rounded-lg border border-dashed p-3">
+                <summary className="cursor-pointer text-sm font-medium">Add suite</summary>
+                <form action={createSuite} className="mt-3 grid gap-3">
+                  <input type="hidden" name="project_id" value={projectId} />
+                  <SuiteFields defaultLanguage="other" defaultFramework="other" defaultLayer="unit" />
+                  <Button type="submit" size="sm" variant="secondary" className="w-fit">
+                    Add suite
+                  </Button>
+                </form>
+              </details>
+            </CardContent>
+          </Card>
+
           <form action={deleteProject}>
             <input type="hidden" name="id" value={projectId} />
             <ConfirmSubmitButton

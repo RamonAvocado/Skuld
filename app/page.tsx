@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { listProjects, latestRun } from "@/lib/db";
+import { listProjects, latestRun, languageBreakdown } from "@/lib/db";
 import { AddProjectDialog } from "@/components/add-project-dialog";
 import { RunButton } from "@/components/run-button";
+import { LanguageBar } from "@/components/language-bar";
 import {
   Card,
   CardContent,
@@ -53,29 +54,32 @@ export default function Home() {
                     {p.root_dir}
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="flex items-center justify-between gap-3">
-                  <div className="min-w-0 text-sm text-muted-foreground">
-                    {r ? (
-                      <>
-                        <span className="font-medium tabular-nums text-foreground">{pct(r.line_rate)}</span>{" "}
-                        lines ·{" "}
-                        <span className="tabular-nums">
-                          {r.passed}/{r.total}
-                        </span>{" "}
-                        pass
-                        {r.failed > 0 && (
-                          <span className="text-destructive"> · {r.failed} failing</span>
-                        )}
-                        <br />
-                        <span className="text-xs">
-                          {new Date(r.finished_at).toLocaleString()} · git {r.git_status}
-                        </span>
-                      </>
-                    ) : (
-                      "never run"
-                    )}
+                <CardContent className="grid gap-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0 text-sm text-muted-foreground">
+                      {r ? (
+                        <>
+                          <span className="font-medium tabular-nums text-foreground">{pct(r.line_rate)}</span>{" "}
+                          lines ·{" "}
+                          <span className="tabular-nums">
+                            {r.passed}/{r.total}
+                          </span>{" "}
+                          pass
+                          {r.failed > 0 && (
+                            <span className="text-destructive"> · {r.failed} failing</span>
+                          )}
+                          <br />
+                          <span className="text-xs">
+                            {new Date(r.finished_at).toLocaleString()} · git {r.git_status}
+                          </span>
+                        </>
+                      ) : (
+                        "never run"
+                      )}
+                    </div>
+                    <RunButton projectId={p.id} label="Run" />
                   </div>
-                  <RunButton projectId={p.id} label="Run" />
+                  {r && <LanguageBar data={languageBreakdown(r.id)} compact />}
                 </CardContent>
               </Card>
             );

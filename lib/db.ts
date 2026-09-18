@@ -74,10 +74,46 @@ function open(): DatabaseSync {
       lines_covered INTEGER NOT NULL DEFAULT 0,
       lines_valid INTEGER NOT NULL DEFAULT 0
     );
+
+    CREATE TABLE IF NOT EXISTS suites (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      name TEXT NOT NULL DEFAULT '',
+      language TEXT NOT NULL DEFAULT 'other',
+      framework TEXT NOT NULL DEFAULT 'other',
+      layer TEXT NOT NULL DEFAULT 'unit',
+      test_command TEXT NOT NULL,
+      junit_path TEXT NOT NULL DEFAULT '.skuld/junit.xml',
+      coverage_xml_path TEXT NOT NULL DEFAULT '',
+      sort INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_suites_project ON suites(project_id, sort);
+    CREATE INDEX IF NOT EXISTS idx_planned_discovered_key ON planned_tests(discovered_test_key);
   `);
   // ponytail: no migration system — add columns introduced after first boot this way.
   try {
     db.exec("ALTER TABLE projects ADD COLUMN git_push INTEGER NOT NULL DEFAULT 0");
+  } catch {
+    /* column already exists */
+  }
+  try {
+    db.exec("ALTER TABLE discovered_tests ADD COLUMN suite_id INTEGER REFERENCES suites(id) ON DELETE SET NULL");
+  } catch {
+    /* column already exists */
+  }
+  try {
+    db.exec("ALTER TABLE coverage_files ADD COLUMN suite_id INTEGER REFERENCES suites(id) ON DELETE SET NULL");
+  } catch {
+    /* column already exists */
+  }
+  try {
+    db.exec("ALTER TABLE areas ADD COLUMN is_auto INTEGER NOT NULL DEFAULT 0");
+  } catch {
+    /* column already exists */
+  }
+  try {
+    db.exec("ALTER TABLE projects ADD COLUMN legacy_migrated INTEGER NOT NULL DEFAULT 0");
   } catch {
     /* column already exists */
   }
@@ -96,6 +132,21 @@ export type Project = {
   junit_path: string;
   coverage_xml_path: string;
   git_push: number;
+  legacy_migrated: number;
+  created_at: string;
+};
+
+export type Suite = {
+  id: number;
+  project_id: number;
+  name: string;
+  language: string;
+  framework: string;
+  layer: string;
+  test_command: string;
+  junit_path: string;
+  coverage_xml_path: string;
+  sort: number;
   created_at: string;
 };
 
@@ -175,7 +226,7 @@ export function coverageForRun(runId: number) {
     .all(runId) as { id: number; path: string; line_rate: number; lines_covered: number; lines_valid: number }[];
 }
 
-export type Area = { id: number; project_id: number; name: string; sort: number };
+export type Area = { id: number; project_id: number; name: string; sort: number; is_auto: number };
 export type PlannedTest = {
   id: number;
   area_id: number;
@@ -207,4 +258,112 @@ export function roadmap(projectId: number) {
        ORDER BY a.sort, a.name, p.id`,
     )
     .all(projectId) as (PlannedTest & { area_name: string })[];
+}
+
+// --- suites ------------------------------------------------------------------
+
+// Lazily backfills a suite for projects created before multi-suite support
+// existed. Must be lazy (not run once at open()) because scripts/selftest.ts
+// inserts a project via raw SQL *after* this module is already imported and
+// open() has already run, then calls runProject() immediately — a boot-time
+// backfill would never see that project. legacy_migrated latches so this is
+// a single cheap SELECT on every call after the first, and so a suite the
+// user deliberately deletes is never silently resurrected.
+function ensureLegacySuiteMigrated(projectId: number): void {
+  const row = db.prepare("SELECT legacy_migrated FROM projects WHERE id = ?").get(projectId) as
+    | { legacy_migrated: number }
+    | undefined;
+  if (!row || row.legacy_migrated) return;
+
+  if (!db.prepare("SELECT 1 FROM suites WHERE project_id = ? LIMIT 1").get(projectId)) {
+    const p = getProject(projectId)!;
+    const info = db
+      .prepare(
+        `INSERT INTO suites (project_id, name, language, framework, layer, test_command, junit_path, coverage_xml_path, sort)
+         VALUES (?, 'default', 'other', 'other', 'unit', ?, ?, ?, 0)`,
+      )
+      .run(projectId, p.test_command, p.junit_path, p.coverage_xml_path);
+    const suiteId = Number(info.lastInsertRowid);
+    db.prepare("UPDATE discovered_tests SET suite_id = ? WHERE project_id = ? AND suite_id IS NULL").run(
+      suiteId,
+      projectId,
+    );
+    db.prepare(
+      `UPDATE coverage_files SET suite_id = ?
+       WHERE suite_id IS NULL AND run_id IN (SELECT id FROM runs WHERE project_id = ?)`,
+    ).run(suiteId, projectId);
+  }
+  db.prepare("UPDATE projects SET legacy_migrated = 1 WHERE id = ?").run(projectId);
+}
+
+export function listSuites(projectId: number): Suite[] {
+  ensureLegacySuiteMigrated(projectId);
+  return db.prepare("SELECT * FROM suites WHERE project_id = ? ORDER BY sort, id").all(projectId) as Suite[];
+}
+
+export function getSuite(id: number): Suite | undefined {
+  return db.prepare("SELECT * FROM suites WHERE id = ?").get(id) as Suite | undefined;
+}
+
+// --- language breakdown -------------------------------------------------------
+
+// Weighted by discovered-test count per suite.language, scoped to the latest
+// run — not cumulative history (would lag a just-added/removed suite) and
+// not coverage-weighted (coverage is optional; the Bun preset has none by
+// design, which would leave TypeScript suites invisible on the bar).
+export function languageBreakdown(runId: number): { language: string; n: number }[] {
+  return db
+    .prepare(
+      `SELECT COALESCE(s.language, 'other') AS language, COUNT(*) AS n
+       FROM discovered_tests dt
+       LEFT JOIN suites s ON s.id = dt.suite_id
+       WHERE dt.run_id = ?
+       GROUP BY COALESCE(s.language, 'other')
+       ORDER BY n DESC`,
+    )
+    .all(runId) as { language: string; n: number }[];
+}
+
+// --- roadmap auto-import ------------------------------------------------------
+
+function findOrCreateAutoArea(projectId: number): Area {
+  const existing = db
+    .prepare("SELECT * FROM areas WHERE project_id = ? AND is_auto = 1 LIMIT 1")
+    .get(projectId) as Area | undefined;
+  if (existing) return existing;
+  const info = db
+    .prepare("INSERT INTO areas (project_id, name, sort, is_auto) VALUES (?, 'Auto-discovered', 9999, 1)")
+    .run(projectId);
+  return { id: Number(info.lastInsertRowid), project_id: projectId, name: "Auto-discovered", sort: 9999, is_auto: 1 };
+}
+
+// Idempotent: never inserts a second row for a discovered_test_key already
+// tracked anywhere in the project (whether from a prior auto-import or a
+// user's own manual link), so repeated runs never duplicate roadmap rows.
+export function autoImportDiscoveredTests(projectId: number, runId: number): void {
+  const area = findOrCreateAutoArea(projectId);
+
+  const discovered = db
+    .prepare(
+      `SELECT dt.key AS key, dt.name AS name, dt.classname AS classname, COALESCE(s.layer, 'unit') AS layer
+       FROM discovered_tests dt
+       LEFT JOIN suites s ON s.id = dt.suite_id
+       WHERE dt.run_id = ?`,
+    )
+    .all(runId) as { key: string; name: string; classname: string; layer: string }[];
+
+  const existsForProject = db.prepare(
+    `SELECT 1 FROM planned_tests p JOIN areas a ON a.id = p.area_id
+     WHERE a.project_id = ? AND p.discovered_test_key = ? LIMIT 1`,
+  );
+  const insert = db.prepare(
+    `INSERT INTO planned_tests (area_id, title, layer, status, discovered_test_key, notes)
+     VALUES (?, ?, ?, 'done', ?, '')`,
+  );
+
+  for (const t of discovered) {
+    if (!t.name || existsForProject.get(projectId, t.key)) continue;
+    const title = t.classname ? `${t.classname} :: ${t.name}` : t.name;
+    insert.run(area.id, title, t.layer, t.key);
+  }
 }
