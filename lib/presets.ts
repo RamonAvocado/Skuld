@@ -34,6 +34,22 @@ export const PRESETS: Preset[] = [
     junitPath: ".skuld/bun-junit.xml",
     coveragePath: "",
   },
+  {
+    language: "typescript",
+    framework: "playwright",
+    label: "Playwright (e2e)",
+    // Best-effort: Playwright's JUnit reporter is normally configured in
+    // playwright.config.ts, not via one clean CLI flag like pytest/Bun.
+    // This combines --reporter=junit with the PLAYWRIGHT_JUNIT_OUTPUT_NAME
+    // env var it reads for the output path — check it against your own
+    // playwright.config and adjust in the Advanced box if you already
+    // configure a reporter there.
+    command: "PLAYWRIGHT_JUNIT_OUTPUT_NAME=.skuld/playwright-junit.xml npx playwright test --reporter=junit",
+    junitPath: ".skuld/playwright-junit.xml",
+    // Playwright doesn't emit Cobertura coverage either — same reasoning as
+    // the Bun preset, coverage stays optional/unset.
+    coveragePath: "",
+  },
 ];
 
 export const FRAMEWORKS_BY_LANGUAGE: Record<Language, { value: string; label: string }[]> = {
@@ -43,6 +59,7 @@ export const FRAMEWORKS_BY_LANGUAGE: Record<Language, { value: string; label: st
   ],
   typescript: [
     { value: "bun-test", label: "Bun test" },
+    { value: "playwright", label: "Playwright (e2e)" },
     { value: "other", label: "Other / custom" },
   ],
   other: [{ value: "other", label: "Other / custom" }],

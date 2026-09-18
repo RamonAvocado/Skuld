@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { cn } from "@/lib/utils";
+import { cn, selectCls as inputCls } from "@/lib/utils";
 import { XIcon } from "lucide-react";
 import {
   getProject,
@@ -30,6 +30,7 @@ import {
 } from "@/lib/actions";
 import { LanguageBar } from "@/components/language-bar";
 import { SuiteFields } from "@/components/suite-fields";
+import { EditPlannedTestDialog } from "@/components/edit-planned-test-dialog";
 import { LAYERS } from "@/lib/presets";
 import { RunButton } from "@/components/run-button";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
@@ -52,9 +53,6 @@ import {
 } from "@/components/ui/table";
 
 export const dynamic = "force-dynamic";
-
-const inputCls =
-  "h-9 rounded-md border bg-background px-3 py-1 text-sm text-foreground shadow-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30";
 
 function pct(n: number) {
   return `${(n * 100).toFixed(1)}%`;
@@ -81,6 +79,9 @@ export default async function ProjectPage({
   const discovered = last ? discoveredForRun(last.id) : [];
   const suites = listSuites(projectId);
   const langData = last ? languageBreakdown(last.id) : [];
+  // node:sqlite rows have a null prototype — plain-object them before
+  // crossing the server→client boundary into EditPlannedTestDialog.
+  const areaOptions = areas.map((a) => ({ id: a.id, name: a.name }));
 
   return (
     <div className="grid gap-6">
@@ -201,81 +202,92 @@ export default async function ProjectPage({
                 </CardHeader>
                 <CardContent className="grid gap-3">
                   {planned.length > 0 && (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-8" />
-                          <TableHead>Test</TableHead>
-                          <TableHead>Layer</TableHead>
-                          <TableHead>Linked to discovered test</TableHead>
-                          <TableHead className="w-8" />
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {planned.map((p) => (
-                          <TableRow key={p.id}>
-                            <TableCell>
-                              <form action={togglePlannedStatus}>
-                                <input type="hidden" name="id" value={p.id} />
-                                <input type="hidden" name="project_id" value={projectId} />
-                                <button
-                                  type="submit"
-                                  aria-label={p.status === "done" ? "Mark as not done" : "Mark as done"}
-                                  aria-pressed={p.status === "done"}
-                                  title="Toggle done"
-                                  className="flex size-5 items-center justify-center rounded border text-xs leading-none transition-colors hover:bg-muted focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
-                                >
-                                  {p.status === "done" ? "✓" : ""}
-                                </button>
-                              </form>
-                            </TableCell>
-                            <TableCell className={p.status === "done" ? "line-through text-muted-foreground" : ""}>
-                              {p.title}
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant="secondary">{p.layer}</Badge>
-                            </TableCell>
-                            <TableCell>
-                              <form action={linkPlannedToDiscovered} className="flex">
-                                <input type="hidden" name="id" value={p.id} />
-                                <input type="hidden" name="project_id" value={projectId} />
-                                <select
-                                  name="discovered_test_key"
-                                  aria-label={`Link "${p.title}" to a discovered test`}
-                                  defaultValue={p.discovered_test_key ?? ""}
-                                  className={inputCls + " max-w-72"}
-                                >
-                                  <option value="">— none —</option>
-                                  {p.discovered_test_key &&
-                                    !discovered.some((d) => d.key === p.discovered_test_key) && (
-                                      <option value={p.discovered_test_key}>
-                                        {p.discovered_test_key} (not in last run)
-                                      </option>
-                                    )}
-                                  {discovered.map((d) => (
-                                    <option key={d.key} value={d.key}>
-                                      {d.key}
-                                    </option>
-                                  ))}
-                                </select>
-                                <Button type="submit" size="sm" variant="ghost">
-                                  link
-                                </Button>
-                              </form>
-                            </TableCell>
-                            <TableCell>
-                              <form action={deletePlannedTest}>
-                                <input type="hidden" name="id" value={p.id} />
-                                <input type="hidden" name="project_id" value={projectId} />
-                                <Button type="submit" size="icon-sm" variant="ghost" aria-label={`Delete "${p.title}"`}>
-                                  <XIcon />
-                                </Button>
-                              </form>
-                            </TableCell>
+                    <details open={!(area.is_auto === 1 && planned.length > 0)}>
+                      <summary className="cursor-pointer text-sm font-medium marker:text-muted-foreground hover:text-foreground">
+                        {planned.length} test{planned.length === 1 ? "" : "s"} · {done} done
+                      </summary>
+                      <Table className="mt-3">
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-8" />
+                            <TableHead>Test</TableHead>
+                            <TableHead>Layer</TableHead>
+                            <TableHead>Linked to discovered test</TableHead>
+                            <TableHead className="w-8" />
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                        </TableHeader>
+                        <TableBody>
+                          {planned.map((p) => (
+                            <TableRow key={p.id}>
+                              <TableCell>
+                                <form action={togglePlannedStatus}>
+                                  <input type="hidden" name="id" value={p.id} />
+                                  <input type="hidden" name="project_id" value={projectId} />
+                                  <button
+                                    type="submit"
+                                    aria-label={p.status === "done" ? "Mark as not done" : "Mark as done"}
+                                    aria-pressed={p.status === "done"}
+                                    title="Toggle done"
+                                    className="flex size-5 items-center justify-center rounded border text-xs leading-none transition-colors hover:bg-muted focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+                                  >
+                                    {p.status === "done" ? "✓" : ""}
+                                  </button>
+                                </form>
+                              </TableCell>
+                              <TableCell className={p.status === "done" ? "line-through text-muted-foreground" : ""}>
+                                <EditPlannedTestDialog
+                                  id={p.id}
+                                  projectId={projectId}
+                                  title={p.title}
+                                  areaId={p.area_id}
+                                  areas={areaOptions}
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="secondary">{p.layer}</Badge>
+                              </TableCell>
+                              <TableCell>
+                                <form action={linkPlannedToDiscovered} className="flex">
+                                  <input type="hidden" name="id" value={p.id} />
+                                  <input type="hidden" name="project_id" value={projectId} />
+                                  <select
+                                    name="discovered_test_key"
+                                    aria-label={`Link "${p.title}" to a discovered test`}
+                                    defaultValue={p.discovered_test_key ?? ""}
+                                    className={inputCls + " max-w-72"}
+                                  >
+                                    <option value="">— none —</option>
+                                    {p.discovered_test_key &&
+                                      !discovered.some((d) => d.key === p.discovered_test_key) && (
+                                        <option value={p.discovered_test_key}>
+                                          {p.discovered_test_key} (not in last run)
+                                        </option>
+                                      )}
+                                    {discovered.map((d) => (
+                                      <option key={d.key} value={d.key}>
+                                        {d.key}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <Button type="submit" size="sm" variant="ghost">
+                                    link
+                                  </Button>
+                                </form>
+                              </TableCell>
+                              <TableCell>
+                                <form action={deletePlannedTest}>
+                                  <input type="hidden" name="id" value={p.id} />
+                                  <input type="hidden" name="project_id" value={projectId} />
+                                  <Button type="submit" size="icon-sm" variant="ghost" aria-label={`Delete "${p.title}"`}>
+                                    <XIcon />
+                                  </Button>
+                                </form>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </details>
                   )}
 
                   <form action={createPlannedTest} className="flex flex-wrap items-end gap-2">

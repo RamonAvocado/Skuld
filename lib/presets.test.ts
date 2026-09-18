@@ -15,6 +15,13 @@ test("findPreset returns the Bun test preset with no coverage path", () => {
   expect(preset!.coveragePath).toBe("");
 });
 
+test("findPreset returns the Playwright preset with no coverage path", () => {
+  const preset = findPreset("typescript", "playwright");
+  expect(preset).toBeDefined();
+  expect(preset!.command).toContain("playwright test");
+  expect(preset!.coveragePath).toBe("");
+});
+
 test("findPreset returns undefined for an unknown combination", () => {
   expect(findPreset("python", "unittest")).toBeUndefined();
 });

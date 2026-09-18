@@ -5,9 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { LANGUAGES, FRAMEWORKS_BY_LANGUAGE, LAYERS, findPreset, type Language } from "@/lib/presets";
-
-const inputCls =
-  "h-9 rounded-md border bg-background px-3 py-1 text-sm text-foreground shadow-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30";
+import { selectCls as inputCls } from "@/lib/utils";
 
 export function SuiteFields({
   defaultName = "",

@@ -147,6 +147,18 @@ export async function createPlannedTest(fd: FormData) {
   revalidatePath(`/projects/${project_id}`);
 }
 
+export async function updatePlannedTest(fd: FormData) {
+  const project_id = int(fd, "project_id");
+  const title = str(fd, "title");
+  if (!title) return;
+  db.prepare("UPDATE planned_tests SET title = ?, area_id = ? WHERE id = ?").run(
+    title,
+    int(fd, "area_id"),
+    int(fd, "id"),
+  );
+  revalidatePath(`/projects/${project_id}`);
+}
+
 export async function togglePlannedStatus(fd: FormData) {
   const project_id = int(fd, "project_id");
   db.prepare(
