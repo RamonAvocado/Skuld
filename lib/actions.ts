@@ -36,7 +36,7 @@ export async function createProject(fd: FormData) {
      VALUES (?, 'default', ?, ?, ?, ?, ?, ?, 0)`,
   ).run(projectId, language, framework, layer, test_command, junit_path, coverage_xml_path);
 
-  revalidatePath("/");
+  revalidatePath("/", "layout");
   redirect(`/projects/${projectId}`);
 }
 
@@ -101,7 +101,7 @@ export async function deleteSuite(fd: FormData) {
 
 export async function deleteProject(fd: FormData) {
   db.prepare("DELETE FROM projects WHERE id = ?").run(int(fd, "id"));
-  revalidatePath("/");
+  revalidatePath("/", "layout");
   redirect("/");
 }
 

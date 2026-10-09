@@ -21,26 +21,20 @@ export default function Home() {
   const projects = listProjects();
 
   return (
-    <div className="grid gap-8">
+    <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-semibold text-balance">Projects</h1>
         <AddProjectDialog />
       </div>
 
       {projects.length === 0 ? (
-        <div className="grid place-items-center gap-2 rounded-xl border border-dashed p-10 text-center">
-          <p className="text-sm text-muted-foreground">No projects yet. Add one to get started.</p>
-          <AddProjectDialog />
-        </div>
+        <p className="text-sm text-muted-foreground">No projects yet.</p>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
           {projects.map((p) => {
             const r = latestRun(p.id);
             return (
-              <Card
-                key={p.id}
-                className="transition-shadow hover:shadow-md focus-within:shadow-md"
-              >
+              <Card key={p.id} className="transition-colors hover:bg-muted/50">
                 <CardHeader>
                   <CardTitle className="min-w-0">
                     <Link
@@ -74,10 +68,10 @@ export default function Home() {
                           </span>
                         </>
                       ) : (
-                        "never run"
+                        "Never run."
                       )}
                     </div>
-                    <RunButton projectId={p.id} label="Run" />
+                    <RunButton projectId={p.id} label="Run" variant="outline" />
                   </div>
                   {r && <LanguageBar data={languageBreakdown(r.id)} compact />}
                 </CardContent>

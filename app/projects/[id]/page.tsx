@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cn, selectCls as inputCls } from "@/lib/utils";
-import { XIcon } from "lucide-react";
+import { ArrowLeftIcon, CheckIcon, ChevronRightIcon, XIcon } from "lucide-react";
 import {
   getProject,
   latestRun,
@@ -88,8 +88,12 @@ export default async function ProjectPage({
       <ErrToast message={err} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
-          <Link href="/" className="text-sm text-muted-foreground hover:underline">
-            ← projects
+          <Link
+            href="/"
+            className="flex w-fit items-center gap-1 text-sm text-muted-foreground hover:underline"
+          >
+            <ArrowLeftIcon className="size-3.5" />
+            Projects
           </Link>
           <h1 className="truncate text-xl font-semibold">{project.name}</h1>
           <p className="truncate text-sm text-muted-foreground" title={project.root_dir}>
@@ -196,14 +200,15 @@ export default async function ProjectPage({
                           : `Delete area "${area.name}" and its planned tests? This can't be undone.`
                       }
                     >
-                      delete area
+                      Delete area
                     </ConfirmSubmitButton>
                   </form>
                 </CardHeader>
                 <CardContent className="grid gap-3">
                   {planned.length > 0 && (
-                    <details open={!(area.is_auto === 1 && planned.length > 0)}>
-                      <summary className="cursor-pointer text-sm font-medium marker:text-muted-foreground hover:text-foreground">
+                    <details className="group" open={!(area.is_auto === 1 && planned.length > 0)}>
+                      <summary className={summaryCls + " font-medium text-muted-foreground"}>
+                        <Chevron />
                         {planned.length} test{planned.length === 1 ? "" : "s"} · {done} done
                       </summary>
                       <Table className="mt-3">
@@ -228,9 +233,13 @@ export default async function ProjectPage({
                                     aria-label={p.status === "done" ? "Mark as not done" : "Mark as done"}
                                     aria-pressed={p.status === "done"}
                                     title="Toggle done"
-                                    className="flex size-5 items-center justify-center rounded border text-xs leading-none transition-colors hover:bg-muted focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+                                    className={cn(
+                                      "flex size-4 items-center justify-center rounded-[4px] border border-input transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30",
+                                      p.status === "done" &&
+                                        "border-primary bg-primary text-primary-foreground dark:bg-primary"
+                                    )}
                                   >
-                                    {p.status === "done" ? "✓" : ""}
+                                    {p.status === "done" && <CheckIcon className="size-3.5" />}
                                   </button>
                                 </form>
                               </TableCell>
@@ -247,7 +256,7 @@ export default async function ProjectPage({
                                 <Badge variant="secondary">{p.layer}</Badge>
                               </TableCell>
                               <TableCell>
-                                <form action={linkPlannedToDiscovered} className="flex">
+                                <form action={linkPlannedToDiscovered} className="flex gap-1">
                                   <input type="hidden" name="id" value={p.id} />
                                   <input type="hidden" name="project_id" value={projectId} />
                                   <select
@@ -270,7 +279,7 @@ export default async function ProjectPage({
                                     ))}
                                   </select>
                                   <Button type="submit" size="sm" variant="ghost">
-                                    link
+                                    Link
                                   </Button>
                                 </form>
                               </TableCell>
@@ -278,7 +287,13 @@ export default async function ProjectPage({
                                 <form action={deletePlannedTest}>
                                   <input type="hidden" name="id" value={p.id} />
                                   <input type="hidden" name="project_id" value={projectId} />
-                                  <Button type="submit" size="icon-sm" variant="ghost" aria-label={`Delete "${p.title}"`}>
+                                  <Button
+                                    type="submit"
+                                    size="icon-sm"
+                                    variant="ghost"
+                                    title="Delete test"
+                                    aria-label={`Delete "${p.title}"`}
+                                  >
                                     <XIcon />
                                   </Button>
                                 </form>
@@ -307,8 +322,8 @@ export default async function ProjectPage({
                         </option>
                       ))}
                     </select>
-                    <Button type="submit" size="sm" variant="secondary">
-                      add test
+                    <Button type="submit" variant="outline">
+                      Add test
                     </Button>
                   </form>
                 </CardContent>
@@ -322,8 +337,8 @@ export default async function ProjectPage({
               <Label htmlFor="area-name">New area</Label>
               <Input id="area-name" name="name" placeholder="Auth, Listing, Billing…" className="w-64" required />
             </div>
-            <Button type="submit" variant="secondary">
-              add area
+            <Button type="submit" variant="outline">
+              Add area
             </Button>
           </form>
         </TabsContent>
@@ -335,18 +350,22 @@ export default async function ProjectPage({
             const tests = discoveredForRun(r.id);
             const cov = coverageForRun(r.id);
             return (
-              <details key={r.id} className="group rounded-lg border p-3 open:bg-muted/20">
-                <summary className="cursor-pointer text-sm marker:text-muted-foreground hover:text-foreground">
+              <details key={r.id} className={detailsCls}>
+                <summary className={summaryCls}>
+                  <Chevron />
                   <span className="font-medium tabular-nums">
                     {new Date(r.finished_at).toLocaleString()}
-                  </span>{" "}
-                  · <span className="tabular-nums">{pct(r.line_rate)}</span> lines ·{" "}
-                  <span className="tabular-nums">
-                    {r.passed}/{r.total}
-                  </span>{" "}
-                  pass
-                  {r.failed > 0 && <span className="text-destructive"> · {r.failed} failing</span>} ·{" "}
-                  <Badge variant="outline">git {r.git_status}</Badge> · exit {r.exit_code}
+                  </span>
+                  <span className="text-muted-foreground">
+                    <span className="tabular-nums">{pct(r.line_rate)}</span> lines ·{" "}
+                    <span className="tabular-nums">
+                      {r.passed}/{r.total}
+                    </span>{" "}
+                    pass
+                    {r.failed > 0 && <span className="text-destructive"> · {r.failed} failing</span>} · exit{" "}
+                    {r.exit_code}
+                  </span>
+                  <Badge variant="secondary">git {r.git_status}</Badge>
                 </summary>
                 <div className="mt-3 grid gap-4 md:grid-cols-2">
                   <div className="min-w-0">
@@ -375,7 +394,7 @@ export default async function ProjectPage({
                   </div>
                 </div>
                 {r.log && (
-                  <pre className="mt-3 max-h-48 overflow-auto rounded bg-muted p-2 text-xs whitespace-pre-wrap">
+                  <pre className="mt-3 max-h-48 overflow-auto rounded-lg bg-muted p-2 text-xs whitespace-pre-wrap">
                     {r.log}
                   </pre>
                 )}
@@ -403,7 +422,7 @@ export default async function ProjectPage({
                   Every run commits a snapshot to <code>.skuld/history/</code> in this project&apos;s own
                   repo. Enable this to also push after each commit.
                 </p>
-                <Button type="submit" className="w-full sm:w-fit">
+                <Button type="submit" variant="outline" className="w-full sm:w-fit">
                   Save settings
                 </Button>
               </form>
@@ -416,11 +435,12 @@ export default async function ProjectPage({
             </CardHeader>
             <CardContent className="grid gap-4">
               {suites.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No suites configured — add one below to enable Run.</p>
+                <p className="text-sm text-muted-foreground">No suites yet.</p>
               ) : (
                 suites.map((suite) => (
-                  <details key={suite.id} className="rounded-lg border p-3">
-                    <summary className="flex cursor-pointer flex-wrap items-center gap-2 text-sm">
+                  <details key={suite.id} className={detailsCls}>
+                    <summary className={summaryCls}>
+                      <Chevron />
                       <span className="font-medium">{suite.name || `${suite.language}/${suite.framework}`}</span>
                       <Badge variant="secondary">{suite.language}</Badge>
                       <Badge variant="secondary">{suite.framework}</Badge>
@@ -439,7 +459,7 @@ export default async function ProjectPage({
                           defaultJunitPath={suite.junit_path}
                           defaultCoveragePath={suite.coverage_xml_path}
                         />
-                        <Button type="submit" size="sm" variant="secondary" className="w-fit">
+                        <Button type="submit" size="sm" variant="outline" className="w-fit">
                           Save suite
                         </Button>
                       </form>
@@ -460,12 +480,15 @@ export default async function ProjectPage({
                 ))
               )}
 
-              <details className="rounded-lg border border-dashed p-3">
-                <summary className="cursor-pointer text-sm font-medium">Add suite</summary>
+              <details className={detailsCls}>
+                <summary className={summaryCls + " font-medium"}>
+                  <Chevron />
+                  Add suite
+                </summary>
                 <form action={createSuite} className="mt-3 grid gap-3">
                   <input type="hidden" name="project_id" value={projectId} />
                   <SuiteFields defaultLanguage="other" defaultFramework="other" defaultLayer="unit" />
-                  <Button type="submit" size="sm" variant="secondary" className="w-fit">
+                  <Button type="submit" size="sm" variant="outline" className="w-fit">
                     Add suite
                   </Button>
                 </form>
@@ -490,19 +513,27 @@ export default async function ProjectPage({
   );
 }
 
+// Disclosure: native <details> with the ecosystem's rotating chevron.
+const detailsCls = "group rounded-lg p-3 ring-1 ring-foreground/10";
+const summaryCls =
+  "flex cursor-pointer list-none flex-wrap items-center gap-x-2 gap-y-1 text-sm [&::-webkit-details-marker]:hidden";
+
+function Chevron() {
+  return (
+    <ChevronRightIcon className="size-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-90" />
+  );
+}
+
 function Tile({ label, value, tone }: { label: string; value: string; tone?: "ok" | "bad" }) {
   return (
-    <div className="rounded-lg border p-3 transition-colors">
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div
-        className={cn(
-          "text-lg font-semibold tabular-nums",
-          tone === "bad" ? "text-destructive" : "text-foreground"
-        )}
-      >
-        {value}
-      </div>
-    </div>
+    <Card size="sm">
+      <CardContent>
+        <div className="text-xs text-muted-foreground">{label}</div>
+        <div className={cn("text-lg font-semibold tabular-nums", tone === "bad" && "text-destructive")}>
+          {value}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
