@@ -1,0 +1,22 @@
+# Run from the repo root:
+#   VERSION=$(jq -r .version package.json) docker compose -f docker/docker-compose.yml up -d --build
+name: skuld
+services:
+  skuld:
+    image: skuld:${VERSION:-dev}
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      args:
+        VERSION: ${VERSION:-dev}
+    ports:
+      - "3003:3003"
+    volumes:
+      - skuld-data:/data
+      # Skuld runs test commands inside the projects it tracks, so mount each checkout
+      # at the path you register it under:
+      # - /path/to/project:/path/to/project
+    restart: unless-stopped
+
+volumes:
+  skuld-data:
