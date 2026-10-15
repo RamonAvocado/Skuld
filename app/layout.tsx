@@ -18,7 +18,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Skuld — test inventory",
-  description: "Run tests, track coverage over time, plan the roadmap.",
+  description: "Run tests, track coverage over time, plan the tests.",
 };
 
 export const viewport: Viewport = {

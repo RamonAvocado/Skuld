@@ -24,10 +24,10 @@ SQLite lives in `./skuld.db` (override with `SKULD_DB`). Schema is created on fi
    to *that project's own git repo* (scoped to `.skuld/` only — never touches other
    uncommitted work). No separate coverage repo to configure. If the project directory
    isn't a git repo, this step is skipped and the run still succeeds.
-   Enable "git push after commit" in a project's Settings tab to also push each snapshot
+   Enable "git push after commit" in a project's settings (the cog) to also push each snapshot
    commit (off by default, since it uses that project's real `origin`).
-3. **Areas & roadmap**: group planned tests by feature area (Auth, Listing…), mark them
-   done, link each to a real discovered test. The roadmap = everything still `todo`.
+3. **Tests**: group planned tests by feature area (Auth, Listing…), mark them
+   done, link each to a real discovered test. The TODO list = everything still `todo`.
 4. **Overview**: line chart of coverage % and test count across all runs.
 
 ## Checks

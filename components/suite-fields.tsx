@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { LANGUAGES, FRAMEWORKS_BY_LANGUAGE, LAYERS, findPreset, type Language } from "@/lib/presets";
-import { selectCls as inputCls } from "@/lib/utils";
+import { FormSelect } from "@/components/form-select";
 
 export function SuiteFields({
   defaultName = "",
@@ -67,55 +67,34 @@ export function SuiteFields({
       </div>
       <div className="grid grid-cols-3 gap-3">
         <div className="grid gap-1.5">
-          <Label htmlFor="suite-language">Language</Label>
-          <select
-            id="suite-language"
+          <Label>Language</Label>
+          <FormSelect
             name="language"
             aria-label="Language"
-            className={inputCls}
             value={language}
-            onChange={(e) => onLanguageChange(e.target.value as Language)}
-          >
-            {LANGUAGES.map((l) => (
-              <option key={l.value} value={l.value}>
-                {l.label}
-              </option>
-            ))}
-          </select>
+            onValueChange={(v) => onLanguageChange(v as Language)}
+            options={LANGUAGES}
+          />
         </div>
         <div className="grid gap-1.5">
-          <Label htmlFor="suite-framework">Framework</Label>
-          <select
-            id="suite-framework"
+          <Label>Framework</Label>
+          <FormSelect
             name="framework"
             aria-label="Framework"
-            className={inputCls}
             value={framework}
-            onChange={(e) => onFrameworkChange(e.target.value)}
-          >
-            {FRAMEWORKS_BY_LANGUAGE[language].map((f) => (
-              <option key={f.value} value={f.value}>
-                {f.label}
-              </option>
-            ))}
-          </select>
+            onValueChange={onFrameworkChange}
+            options={FRAMEWORKS_BY_LANGUAGE[language]}
+          />
         </div>
         <div className="grid gap-1.5">
-          <Label htmlFor="suite-layer">Layer</Label>
-          <select
-            id="suite-layer"
+          <Label>Layer</Label>
+          <FormSelect
             name="layer"
             aria-label="Layer"
-            className={inputCls}
             value={layer}
-            onChange={(e) => setLayer(e.target.value)}
-          >
-            {LAYERS.map((l) => (
-              <option key={l} value={l}>
-                {l}
-              </option>
-            ))}
-          </select>
+            onValueChange={setLayer}
+            options={LAYERS.map((l) => ({ value: l, label: l }))}
+          />
         </div>
       </div>
 

@@ -5,8 +5,8 @@ import { RunButton } from "@/components/run-button";
 import { LanguageBar } from "@/components/language-bar";
 import {
   Card,
+  CardAction,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -30,27 +30,20 @@ export default function Home() {
       {projects.length === 0 ? (
         <p className="text-sm text-muted-foreground">No projects yet.</p>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3">
           {projects.map((p) => {
             const r = latestRun(p.id);
             return (
               <Card key={p.id} className="transition-colors hover:bg-muted/50">
                 <CardHeader>
-                  <CardTitle className="min-w-0">
+                  <CardTitle className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
                     <Link
                       href={`/projects/${p.id}`}
                       className="rounded-sm underline-offset-2 hover:underline focus-visible:underline focus-visible:outline-none"
                     >
                       {p.name}
                     </Link>
-                  </CardTitle>
-                  <CardDescription className="truncate" title={p.root_dir}>
-                    {p.root_dir}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="grid gap-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0 text-sm text-muted-foreground">
+                    <span className="text-sm font-normal text-muted-foreground">
                       {r ? (
                         <>
                           <span className="font-medium tabular-nums text-foreground">{pct(r.line_rate)}</span>{" "}
@@ -62,19 +55,21 @@ export default function Home() {
                           {r.failed > 0 && (
                             <span className="text-destructive"> · {r.failed} failing</span>
                           )}
-                          <br />
-                          <span className="text-xs">
-                            {new Date(r.finished_at).toLocaleString()} · git {r.git_status}
-                          </span>
                         </>
                       ) : (
                         "Never run."
                       )}
-                    </div>
+                    </span>
+                  </CardTitle>
+                  <CardAction>
                     <RunButton projectId={p.id} label="Run" variant="outline" />
-                  </div>
-                  {r && <LanguageBar data={languageBreakdown(r.id)} compact />}
-                </CardContent>
+                  </CardAction>
+                </CardHeader>
+                {r && (
+                  <CardContent>
+                    <LanguageBar data={languageBreakdown(r.id)} compact />
+                  </CardContent>
+                )}
               </Card>
             );
           })}

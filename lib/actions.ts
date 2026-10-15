@@ -48,7 +48,7 @@ export async function updateProject(fd: FormData) {
     fd.get("git_push") ? 1 : 0,
     id,
   );
-  revalidatePath(`/projects/${id}`);
+  revalidatePath("/", "layout");
 }
 
 export async function createSuite(fd: FormData) {
@@ -71,7 +71,7 @@ export async function createSuite(fd: FormData) {
     str(fd, "coverage_xml_path"),
     int(fd, "sort"),
   );
-  revalidatePath(`/projects/${project_id}`);
+  revalidatePath(`/projects/${project_id}`, "layout");
 }
 
 export async function updateSuite(fd: FormData) {
@@ -90,13 +90,13 @@ export async function updateSuite(fd: FormData) {
     str(fd, "coverage_xml_path"),
     int(fd, "id"),
   );
-  revalidatePath(`/projects/${project_id}`);
+  revalidatePath(`/projects/${project_id}`, "layout");
 }
 
 export async function deleteSuite(fd: FormData) {
   const project_id = int(fd, "project_id");
   db.prepare("DELETE FROM suites WHERE id = ?").run(int(fd, "id"));
-  revalidatePath(`/projects/${project_id}`);
+  revalidatePath(`/projects/${project_id}`, "layout");
 }
 
 export async function deleteProject(fd: FormData) {
@@ -192,4 +192,10 @@ export async function deletePlannedTest(fd: FormData) {
   const project_id = int(fd, "project_id");
   db.prepare("DELETE FROM planned_tests WHERE id = ?").run(int(fd, "id"));
   revalidatePath(`/projects/${project_id}`);
+}
+
+// Plain args, not FormData: called from a drop handler, not a <form>.
+export async function movePlannedTest(id: number, areaId: number, projectId: number) {
+  db.prepare("UPDATE planned_tests SET area_id = ? WHERE id = ?").run(areaId, id);
+  revalidatePath(`/projects/${projectId}`);
 }

@@ -2,9 +2,14 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/* @mimird/ui ships compiled in node_modules, which Tailwind does not scan by default. */
+@source "../node_modules/@mimird/ui/dist";
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+    --shadow-floating: var(--elev-floating);
+    --color-brand: var(--brand);
     --font-heading: var(--font-sans);
     --font-sans: var(--font-sans);
     --font-mono: var(--font-mono);
@@ -49,6 +54,7 @@
 }
 
 :root {
+    --elev-floating: 0 8px 24px -8px rgb(0 0 0 / 0.15), 0 24px 48px -16px rgb(0 0 0 / 0.12);
     color-scheme: light;
     --background: oklch(1 0 0);
     --foreground: oklch(0.145 0 0);
@@ -85,6 +91,8 @@
 }
 
 .dark {
+    --elev-floating: inset 0 1px 1px rgb(255 255 255 / 0.15), 0 8px 24px -8px rgb(0 0 0 / 0.6),
+      0 24px 48px -16px rgb(0 0 0 / 0.5);
     color-scheme: dark;
     --background: oklch(0.145 0 0);
     --foreground: oklch(0.985 0 0);
@@ -143,5 +151,35 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+/* Orange is the one light: active sidebar icon, links, focus rings. See DESIGN.md. */
+:root {
+    --brand: #ea580c;
+    --ring: #ea580c;
+    --sidebar-ring: #ea580c;
+}
+
+.dark {
+    --brand: #fb923c;
+    --ring: #fb923c;
+    --sidebar-ring: #fb923c;
+}
+
+::selection {
+    background: color-mix(in oklab, var(--brand) 28%, transparent);
+}
+
+@layer utilities {
+  /* Inline link: a brand tint mixed into the text color; full brand + underline on hover. */
+  .link-subtle {
+    color: color-mix(in oklab, var(--brand) 55%, currentColor);
+    text-underline-offset: 2px;
+    transition: color 150ms;
+  }
+  .link-subtle:hover,
+  .link-subtle:focus-visible {
+    color: var(--brand);
+    text-decoration-line: underline;
   }
 }

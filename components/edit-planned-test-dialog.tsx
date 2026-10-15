@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { updatePlannedTest } from "@/lib/actions";
-import { selectCls } from "@/lib/utils";
+import { FormSelect } from "@/components/form-select";
 
 export function EditPlannedTestDialog({
   id,
@@ -57,14 +57,8 @@ export function EditPlannedTestDialog({
             <Input id={`title-${id}`} name="title" defaultValue={title} required />
           </div>
           <div className="grid gap-1.5">
-            <Label htmlFor={`area-${id}`}>Group</Label>
-            <select id={`area-${id}`} name="area_id" defaultValue={areaId} className={selectCls}>
-              {areas.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
+            <Label>Group</Label>
+            <FormSelect name="area_id" aria-label="Group" defaultValue={String(areaId)} options={areas.map((a) => ({ value: String(a.id), label: a.name }))} />
           </div>
           <Button type="submit" className="w-fit">
             Save
