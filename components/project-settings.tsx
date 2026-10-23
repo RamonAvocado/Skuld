@@ -1,12 +1,20 @@
 "use client";
 
 import * as React from "react";
-import { FlaskConicalIcon, SettingsIcon } from "lucide-react";
+import { FlaskConicalIcon, GaugeIcon, SettingsIcon } from "lucide-react";
 import { Modal } from "@mimird/ui/components/modal";
 import { Separator } from "@mimird/ui/components/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@mimird/ui/components/tabs";
-import { updateProject, deleteProject, createSuite, updateSuite, deleteSuite } from "@/lib/actions";
+import {
+  updateProject,
+  deleteProject,
+  createSuite,
+  updateSuite,
+  deleteSuite,
+  updatePerfSettings,
+} from "@/lib/actions";
 import type { Suite } from "@/lib/db";
+import { DEFAULT_SITESPEED_COMMAND } from "@/lib/presets";
 import { setHash, useHash } from "@/lib/use-hash";
 import { SuiteFields } from "@/components/suite-fields";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
@@ -21,7 +29,25 @@ import { Checkbox } from "@/components/ui/checkbox";
 const SECTIONS = [
   { value: "settings/general", label: "General", icon: SettingsIcon },
   { value: "settings/suites", label: "Test suites", icon: FlaskConicalIcon },
+  { value: "settings/performance", label: "Performance", icon: GaugeIcon },
 ] as const;
+
+export type SettingsProject = {
+  id: number;
+  name: string;
+  root_dir: string;
+  git_push: number;
+  enable_tests: number;
+  enable_perf: number;
+  api_base_url: string;
+  login_path: string;
+  login_email: string;
+  /** Whether a password is stored; the password itself never reaches the page. */
+  has_password: boolean;
+  site_url: string;
+  site_cookie: string;
+  sitespeed_command: string;
+};
 
 // The scroll container clips anything outside it, so -m-1 p-1 leaves room for
 // the 3px focus ring of controls that touch its edge without moving them.
@@ -31,7 +57,7 @@ export function ProjectSettings({
   project,
   suites,
 }: {
-  project: { id: number; name: string; root_dir: string; git_push: number };
+  project: SettingsProject;
   suites: Suite[];
 }) {
   // The fragment is the state: #settings/general, #settings/suites.
@@ -80,6 +106,17 @@ export function ProjectSettings({
               <input type="hidden" name="id" value={projectId} />
               <Field name="name" label="Name" defaultValue={project.name} />
               <Field name="root_dir" label="Project directory" defaultValue={project.root_dir} mono />
+              <fieldset className="grid gap-2">
+                <legend className="mb-1.5 text-sm font-medium">Parts</legend>
+                <label className="flex w-fit cursor-pointer items-center gap-2 text-sm">
+                  <Checkbox name="enable_tests" defaultChecked={project.enable_tests === 1} />
+                  Tests
+                </label>
+                <label className="flex w-fit cursor-pointer items-center gap-2 text-sm">
+                  <Checkbox name="enable_perf" defaultChecked={project.enable_perf === 1} />
+                  Performance
+                </label>
+              </fieldset>
               <label className="flex w-fit cursor-pointer items-center gap-2 text-sm">
                 <Checkbox name="git_push" defaultChecked={project.git_push === 1} />
                 Git push after commit
@@ -174,6 +211,48 @@ export function ProjectSettings({
               </form>
             </details>
           </TabsContent>
+          <TabsContent value="settings/performance" className={PANEL_CLASS}>
+            <form action={updatePerfSettings} className="flex max-w-md flex-col gap-3">
+              <input type="hidden" name="id" value={projectId} />
+              <h4 className="font-medium">Endpoints</h4>
+              <Field name="api_base_url" label="API base URL" defaultValue={project.api_base_url} placeholder="http://localhost:8000" mono />
+              <Field name="login_path" label="Login path" defaultValue={project.login_path} mono />
+              <Field name="login_email" label="Login email" defaultValue={project.login_email} />
+              <Field
+                name="login_password"
+                label="Login password"
+                defaultValue=""
+                type="password"
+                placeholder={project.has_password ? "Saved — leave empty to keep" : ""}
+              />
+              <p className="-mt-2 text-xs text-muted-foreground">
+                Skuld logs in before each run and sends the token as a Bearer. <code>{"{userId}"}</code> in a
+                path becomes the id from the login response. Use a test account: the password is stored in
+                Skuld&apos;s local database.
+              </p>
+
+              <Separator />
+
+              <h4 className="font-medium">Pages</h4>
+              <Field name="site_url" label="Site URL" defaultValue={project.site_url} placeholder="http://localhost:3000" mono />
+              <Field name="site_cookie" label="Cookie (optional)" defaultValue={project.site_cookie} placeholder="session=…" mono />
+              <Field
+                name="sitespeed_command"
+                label="sitespeed.io command"
+                defaultValue={project.sitespeed_command}
+                placeholder={DEFAULT_SITESPEED_COMMAND}
+                mono
+              />
+              <p className="-mt-2 text-xs text-muted-foreground">
+                Runs in a fresh folder holding <code>urls.txt</code> and must write its report to{" "}
+                <code>report/</code>. Empty uses the bundled sitespeed.io with the system Chromium; add{" "}
+                <code>--video true</code> for filmstrips if ffmpeg is installed.
+              </p>
+              <Button type="submit" size="sm" className="w-fit">
+                Save
+              </Button>
+            </form>
+          </TabsContent>
         </Tabs>
       </Modal>
     </>
@@ -185,11 +264,15 @@ function Field({
   label,
   defaultValue,
   mono,
+  type,
+  placeholder,
 }: {
   name: string;
   label: string;
   defaultValue: string;
   mono?: boolean;
+  type?: string;
+  placeholder?: string;
 }) {
   return (
     <div className="grid gap-1.5">
@@ -198,7 +281,9 @@ function Field({
         id={`project-${name}`}
         name={name}
         defaultValue={defaultValue}
-        autoComplete="off"
+        type={type}
+        placeholder={placeholder}
+        autoComplete={type === "password" ? "new-password" : "off"}
         spellCheck={false}
         className={mono ? "font-mono text-sm" : undefined}
       />

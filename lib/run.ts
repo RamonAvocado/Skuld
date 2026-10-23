@@ -9,10 +9,11 @@ const pexec = promisify(execFile);
 
 type Sh = { code: number; out: string };
 
-async function sh(cmd: string, cwd: string): Promise<Sh> {
+export async function sh(cmd: string, cwd: string, env?: NodeJS.ProcessEnv): Promise<Sh> {
   try {
     const { stdout, stderr } = await pexec("/bin/sh", ["-c", cmd], {
       cwd,
+      env,
       maxBuffer: 20 * 1024 * 1024,
       timeout: 20 * 60 * 1000, // ponytail: blocking 20-min ceiling per suite; add a job queue if suites outgrow it
     });

@@ -1,8 +1,10 @@
 import { DatabaseSync } from "node:sqlite";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 // ponytail: node:sqlite (stdlib, Node 22+) instead of a native better-sqlite3 build.
 const DB_PATH = process.env.SKULD_DB || join(process.cwd(), "skuld.db");
+// sitespeed.io reports live next to the database, served by app/perf-report.
+export const REPORTS_DIR = join(dirname(DB_PATH), "perf-reports");
 
 const g = globalThis as unknown as { __skuldDb?: DatabaseSync };
 
@@ -89,6 +91,50 @@ function open(): DatabaseSync {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_suites_project ON suites(project_id, sort);
+
+    -- kind: 'endpoint' (Skuld calls the backend) or 'page' (sitespeed.io loads it)
+    CREATE TABLE IF NOT EXISTS perf_entries (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL,
+      method TEXT NOT NULL DEFAULT 'GET',
+      path TEXT NOT NULL,
+      body TEXT NOT NULL DEFAULT '',
+      area TEXT NOT NULL DEFAULT ''
+    );
+
+    CREATE TABLE IF NOT EXISTS perf_runs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL,
+      started_at TEXT NOT NULL,
+      finished_at TEXT NOT NULL,
+      failed INTEGER NOT NULL DEFAULT 0,
+      total_ms REAL NOT NULL DEFAULT 0,
+      total_bytes INTEGER NOT NULL DEFAULT 0,
+      report_dir TEXT NOT NULL DEFAULT '',
+      log TEXT NOT NULL DEFAULT ''
+    );
+
+    -- label is the entry's method + path at run time, so history survives a deleted entry.
+    -- Endpoints: ms = full body received, ttfb = headers received, bytes = decoded body.
+    -- Pages: ms = onLoad, bytes = transferred, plus requests/fcp/lcp; medians over sitespeed's runs.
+    CREATE TABLE IF NOT EXISTS perf_results (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      run_id INTEGER NOT NULL REFERENCES perf_runs(id) ON DELETE CASCADE,
+      entry_id INTEGER REFERENCES perf_entries(id) ON DELETE SET NULL,
+      label TEXT NOT NULL,
+      area TEXT NOT NULL DEFAULT '',
+      status INTEGER NOT NULL DEFAULT 0,
+      ms REAL NOT NULL DEFAULT 0,
+      ttfb REAL NOT NULL DEFAULT 0,
+      bytes INTEGER NOT NULL DEFAULT 0,
+      requests INTEGER NOT NULL DEFAULT 0,
+      fcp REAL NOT NULL DEFAULT 0,
+      lcp REAL NOT NULL DEFAULT 0,
+      error TEXT NOT NULL DEFAULT ''
+    );
+    CREATE INDEX IF NOT EXISTS idx_perf_runs_project ON perf_runs(project_id, kind, id);
     CREATE INDEX IF NOT EXISTS idx_planned_discovered_key ON planned_tests(discovered_test_key);
   `);
   // ponytail: no migration system — add columns introduced after first boot this way.
@@ -117,6 +163,33 @@ function open(): DatabaseSync {
   } catch {
     /* column already exists */
   }
+  // Which parts of Skuld a project uses, and how performance runs reach it.
+  // ponytail: the login password is stored in plain text in the local db; use a throwaway test account.
+  for (const col of [
+    "enable_tests INTEGER NOT NULL DEFAULT 1",
+    "enable_perf INTEGER NOT NULL DEFAULT 0",
+    "api_base_url TEXT NOT NULL DEFAULT ''",
+    "login_path TEXT NOT NULL DEFAULT '/api/v1/auth/login'",
+    "login_email TEXT NOT NULL DEFAULT ''",
+    "login_password TEXT NOT NULL DEFAULT ''",
+    "site_url TEXT NOT NULL DEFAULT ''",
+    "site_cookie TEXT NOT NULL DEFAULT ''",
+    "sitespeed_command TEXT NOT NULL DEFAULT ''",
+  ]) {
+    try {
+      db.exec(`ALTER TABLE projects ADD COLUMN ${col}`);
+    } catch {
+      /* column already exists */
+    }
+  }
+  // A page's own sitespeed.io report, relative to REPORTS_DIR.
+  for (const col of ["report_path TEXT NOT NULL DEFAULT ''"]) {
+    try {
+      db.exec(`ALTER TABLE perf_results ADD COLUMN ${col}`);
+    } catch {
+      /* column already exists */
+    }
+  }
   return db;
 }
 
@@ -134,6 +207,15 @@ export type Project = {
   git_push: number;
   legacy_migrated: number;
   created_at: string;
+  enable_tests: number;
+  enable_perf: number;
+  api_base_url: string;
+  login_path: string;
+  login_email: string;
+  login_password: string;
+  site_url: string;
+  site_cookie: string;
+  sitespeed_command: string;
 };
 
 export type Suite = {
@@ -366,4 +448,82 @@ export function autoImportDiscoveredTests(projectId: number, runId: number): voi
     const title = t.classname ? `${t.classname} :: ${t.name}` : t.name;
     insert.run(area.id, title, t.layer, t.key);
   }
+}
+
+// --- performance ----------------------------------------------------------------
+
+export type PerfKind = "endpoint" | "page";
+
+export type PerfEntry = {
+  id: number;
+  project_id: number;
+  kind: PerfKind;
+  method: string;
+  path: string;
+  body: string;
+  area: string;
+};
+
+export type PerfRun = {
+  id: number;
+  project_id: number;
+  kind: PerfKind;
+  started_at: string;
+  finished_at: string;
+  failed: number;
+  total_ms: number;
+  total_bytes: number;
+  report_dir: string;
+  log: string;
+};
+
+export type PerfResult = {
+  id: number;
+  run_id: number;
+  entry_id: number | null;
+  label: string;
+  area: string;
+  status: number;
+  ms: number;
+  ttfb: number;
+  bytes: number;
+  requests: number;
+  fcp: number;
+  lcp: number;
+  error: string;
+  report_path: string;
+};
+
+export function listPerfEntries(projectId: number, kind: PerfKind): PerfEntry[] {
+  return db
+    .prepare("SELECT * FROM perf_entries WHERE project_id = ? AND kind = ? ORDER BY area, path, id")
+    .all(projectId, kind) as PerfEntry[];
+}
+
+export function listPerfRuns(projectId: number, kind: PerfKind): PerfRun[] {
+  return db
+    .prepare("SELECT * FROM perf_runs WHERE project_id = ? AND kind = ? ORDER BY id DESC")
+    .all(projectId, kind) as PerfRun[];
+}
+
+export function perfResultsForRun(runId: number): PerfResult[] {
+  return db.prepare("SELECT * FROM perf_results WHERE run_id = ? ORDER BY ms DESC").all(runId) as PerfResult[];
+}
+
+export type PerfPoint = { entry_id: number; finished_at: string; status: number; ms: number; bytes: number; lcp: number };
+
+/** Every measurement of each entry, oldest first, keyed by entry id. */
+export function perfSeries(projectId: number, kind: PerfKind): Map<number, PerfPoint[]> {
+  const rows = db
+    .prepare(
+      `SELECT r.entry_id, pr.finished_at, r.status, r.ms, r.bytes, r.lcp
+       FROM perf_results r JOIN perf_runs pr ON pr.id = r.run_id
+       WHERE pr.project_id = ? AND pr.kind = ? AND r.entry_id IS NOT NULL
+       ORDER BY pr.id`,
+    )
+    .all(projectId, kind) as PerfPoint[];
+  const series = new Map<number, PerfPoint[]>();
+  // spread: node:sqlite rows have a null prototype and these cross into a client chart
+  for (const r of rows) series.set(r.entry_id, [...(series.get(r.entry_id) ?? []), { ...r }]);
+  return series;
 }

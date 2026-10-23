@@ -21,14 +21,20 @@ export function RunButton({
   projectId,
   label = "Run tests",
   variant,
+  action = runProjectAction,
+  kind,
 }: {
   projectId: number;
   label?: string;
   variant?: Variant;
+  action?: (fd: FormData) => Promise<void>;
+  /** Sent along for runPerfAction: "endpoint" or "page". */
+  kind?: string;
 }) {
   return (
-    <form action={runProjectAction}>
+    <form action={action}>
       <input type="hidden" name="id" value={projectId} />
+      {kind && <input type="hidden" name="kind" value={kind} />}
       <Inner label={label} variant={variant} />
     </form>
   );

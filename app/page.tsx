@@ -62,7 +62,7 @@ export default function Home() {
                     </span>
                   </CardTitle>
                   <CardAction>
-                    <RunButton projectId={p.id} label="Run" variant="outline" />
+                    {p.enable_tests === 1 && <RunButton projectId={p.id} label="Run" variant="outline" />}
                   </CardAction>
                 </CardHeader>
                 {r && (

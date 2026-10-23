@@ -76,3 +76,10 @@ export function findPreset(language: string, framework: string): Preset | undefi
 }
 
 export const LAYERS = ["unit", "integration", "e2e", "other"] as const;
+
+// The command Skuld runs for page entries when a project sets none. It runs in a
+// folder holding urls.txt and must leave its report in report/.
+// sitespeed.io is a Skuld dependency (on PATH via node_modules/.bin) driving the system
+// Chromium, so its chromedriver always matches; video is off because it needs ffmpeg.
+export const DEFAULT_SITESPEED_COMMAND =
+  "sitespeed.io urls.txt -n 3 --outputFolder report --browsertime.headless true --browsertime.chrome.binaryPath /usr/bin/chromium --browsertime.chrome.chromedriverPath /usr/bin/chromedriver --browsertime.chrome.args no-sandbox --video false --visualMetrics false";

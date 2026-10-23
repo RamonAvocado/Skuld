@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "./db";
 import { runProject } from "./run";
+import { runPerf } from "./perf";
+import type { PerfKind } from "./db";
 
 function str(fd: FormData, k: string): string {
   return String(fd.get(k) ?? "").trim();
@@ -42,10 +44,14 @@ export async function createProject(fd: FormData) {
 
 export async function updateProject(fd: FormData) {
   const id = int(fd, "id");
-  db.prepare(`UPDATE projects SET name = ?, root_dir = ?, git_push = ? WHERE id = ?`).run(
+  db.prepare(
+    `UPDATE projects SET name = ?, root_dir = ?, git_push = ?, enable_tests = ?, enable_perf = ? WHERE id = ?`,
+  ).run(
     str(fd, "name"),
     str(fd, "root_dir"),
     fd.get("git_push") ? 1 : 0,
+    fd.get("enable_tests") ? 1 : 0,
+    fd.get("enable_perf") ? 1 : 0,
     id,
   );
   revalidatePath("/", "layout");
@@ -198,4 +204,57 @@ export async function deletePlannedTest(fd: FormData) {
 export async function movePlannedTest(id: number, areaId: number, projectId: number) {
   db.prepare("UPDATE planned_tests SET area_id = ? WHERE id = ?").run(areaId, id);
   revalidatePath(`/projects/${projectId}`);
+}
+
+// --- performance ----------------------------------------------------------------
+
+function perfKind(fd: FormData): PerfKind {
+  return str(fd, "kind") === "page" ? "page" : "endpoint";
+}
+
+export async function updatePerfSettings(fd: FormData) {
+  const id = int(fd, "id");
+  db.prepare(
+    `UPDATE projects SET api_base_url = ?, login_path = ?, login_email = ?, site_url = ?, site_cookie = ?, sitespeed_command = ? WHERE id = ?`,
+  ).run(
+    str(fd, "api_base_url"),
+    str(fd, "login_path") || "/api/v1/auth/login",
+    str(fd, "login_email"),
+    str(fd, "site_url"),
+    str(fd, "site_cookie"),
+    str(fd, "sitespeed_command"),
+    id,
+  );
+  // An empty password field keeps the stored one, so it never has to be sent back to the page.
+  const password = String(fd.get("login_password") ?? "");
+  if (password) db.prepare("UPDATE projects SET login_password = ? WHERE id = ?").run(password, id);
+  revalidatePath(`/projects/${id}`);
+}
+
+export async function createPerfEntry(fd: FormData) {
+  const project_id = int(fd, "project_id");
+  const path = str(fd, "path");
+  if (!path) return;
+  db.prepare("INSERT INTO perf_entries (project_id, kind, method, path, body, area) VALUES (?, ?, ?, ?, ?, ?)").run(
+    project_id,
+    perfKind(fd),
+    (str(fd, "method") || "GET").toUpperCase(),
+    path,
+    str(fd, "body"),
+    str(fd, "area"),
+  );
+  revalidatePath(`/projects/${project_id}`);
+}
+
+export async function deletePerfEntry(fd: FormData) {
+  const project_id = int(fd, "project_id");
+  db.prepare("DELETE FROM perf_entries WHERE id = ?").run(int(fd, "id"));
+  revalidatePath(`/projects/${project_id}`);
+}
+
+export async function runPerfAction(fd: FormData): Promise<void> {
+  const id = int(fd, "id");
+  const res = await runPerf(id, perfKind(fd));
+  revalidatePath(`/projects/${id}`);
+  if (!res.ok) redirect(`/projects/${id}?err=${encodeURIComponent(res.error.slice(0, 300))}`);
 }

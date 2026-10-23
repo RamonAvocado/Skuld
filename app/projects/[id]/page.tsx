@@ -36,6 +36,7 @@ import { RunButton } from "@/components/run-button";
 import { Chevron, detailsCls, summaryCls } from "@/components/disclosure";
 import { EvolutionChart } from "@/components/evolution-chart";
 import { ErrToast } from "@/components/err-toast";
+import { PerfPanel } from "@/components/perf-panel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -82,6 +83,8 @@ export default async function ProjectPage({
   const areaOptions = areas.map((a) => ({ id: a.id, name: a.name }));
   const discoveredKeys = discovered.map((d) => d.key);
   const suites = listSuites(projectId).map((s) => ({ ...s }));
+  const tests = project.enable_tests === 1;
+  const perf = project.enable_perf === 1;
 
   return (
     <div className="grid gap-6">
@@ -98,22 +101,59 @@ export default async function ProjectPage({
           <h1 className="truncate text-xl font-semibold">{project.name}</h1>
         </div>
         <div className="flex items-center gap-2">
-          <RunButton projectId={projectId} />
+          {tests && <RunButton projectId={projectId} />}
           <ProjectSettings
-            project={{ id: project.id, name: project.name, root_dir: project.root_dir, git_push: project.git_push }}
+            project={{
+              id: project.id,
+              name: project.name,
+              root_dir: project.root_dir,
+              git_push: project.git_push,
+              enable_tests: project.enable_tests,
+              enable_perf: project.enable_perf,
+              api_base_url: project.api_base_url,
+              login_path: project.login_path,
+              login_email: project.login_email,
+              has_password: Boolean(project.login_password),
+              site_url: project.site_url,
+              site_cookie: project.site_cookie,
+              sitespeed_command: project.sitespeed_command,
+            }}
             suites={suites}
           />
         </div>
       </div>
 
-      <Tabs defaultValue="overview">
+      {!tests && !perf && (
+        <p className="text-sm text-muted-foreground">Turn on tests or performance in the project settings.</p>
+      )}
+
+      <Tabs defaultValue={tests ? "overview" : "performance"} className={cn(!tests && !perf && "hidden")}>
         <div className="-mx-4 overflow-x-auto overflow-y-hidden px-4 sm:mx-0 sm:px-0">
           <TabsList>
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="roadmap">Tests</TabsTrigger>
-            <TabsTrigger value="runs">Runs ({runs.length})</TabsTrigger>
+            {tests && <TabsTrigger value="overview">Overview</TabsTrigger>}
+            {tests && <TabsTrigger value="roadmap">Tests</TabsTrigger>}
+            {tests && <TabsTrigger value="runs">Runs ({runs.length})</TabsTrigger>}
+            {perf && <TabsTrigger value="performance">Performance</TabsTrigger>}
           </TabsList>
         </div>
+
+        {/* -------- Performance -------- */}
+        {perf && (
+          <TabsContent value="performance" className="pt-4">
+            <Tabs defaultValue="endpoint">
+              <TabsList>
+                <TabsTrigger value="endpoint">Endpoints</TabsTrigger>
+                <TabsTrigger value="page">Pages</TabsTrigger>
+              </TabsList>
+              <TabsContent value="endpoint" className="pt-2">
+                <PerfPanel projectId={projectId} kind="endpoint" />
+              </TabsContent>
+              <TabsContent value="page" className="pt-2">
+                <PerfPanel projectId={projectId} kind="page" />
+              </TabsContent>
+            </Tabs>
+          </TabsContent>
+        )}
 
         {/* -------- Overview -------- */}
         <TabsContent value="overview" className="grid gap-4 pt-4">
