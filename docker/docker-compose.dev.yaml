@@ -1,0 +1,27 @@
+services:
+  skuld-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    image: skuld-dev
+    container_name: skuld-dev
+    working_dir: /app
+    # Same uid as the host user so files it writes (skuld.db, perf-reports) stay yours
+    user: "1000:1000"
+    environment:
+      HOME: /tmp
+      # Separate build dir: next dev locks its dist dir, so it can't share .next with a host `bun run dev`
+      NEXT_DIST_DIR: .next-docker
+    command: sh -c "bun install && bun run dev"
+    ports:
+      - "23003:3003"
+    env_file:
+      - path: ../.env
+        required: false
+    # Whole repo mounted: code changes hot-reload, skuld.db is the same file host `bun run dev` uses
+    volumes:
+      - ..:/app
+      # Skuld runs test commands inside the projects it tracks, so mount each checkout
+      # at the path you register it under:
+      # - /path/to/project:/path/to/project
+    restart: unless-stopped
