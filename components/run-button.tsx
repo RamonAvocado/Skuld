@@ -1,8 +1,8 @@
 "use client";
 
 import { useFormStatus } from "react-dom";
-import { Button } from "@/components/ui/button";
-import { Loader2Icon, PlayIcon } from "lucide-react";
+import { Button } from "@mimird/ui/components/button";
+import { PlayIcon } from "lucide-react";
 import { runProjectAction } from "@/lib/actions";
 
 type Variant = React.ComponentProps<typeof Button>["variant"];
@@ -10,8 +10,8 @@ type Variant = React.ComponentProps<typeof Button>["variant"];
 function Inner({ label, variant }: { label: string; variant?: Variant }) {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" size="sm" variant={variant} disabled={pending}>
-      {pending ? <Loader2Icon className="animate-spin" /> : <PlayIcon />}
+    <Button type="submit" size="sm" variant={variant} loading={pending}>
+      {!pending && <PlayIcon />}
       {pending ? "Running…" : label}
     </Button>
   );
@@ -19,7 +19,7 @@ function Inner({ label, variant }: { label: string; variant?: Variant }) {
 
 export function RunButton({
   projectId,
-  label = "Run tests",
+  label = "Run Tests",
   variant,
   action = runProjectAction,
   kind,

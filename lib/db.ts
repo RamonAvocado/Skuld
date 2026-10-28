@@ -190,10 +190,30 @@ function open(): DatabaseSync {
       /* column already exists */
     }
   }
+  // Users, sign-in codes and avatars for @mimird/auth's kvStore (instrumentation.ts).
+  db.exec("CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
   return db;
 }
 
 export const db: DatabaseSync = g.__skuldDb ?? (g.__skuldDb = open());
+
+// --- key-value store (auth) -------------------------------------------------
+
+export async function kvGet(key: string): Promise<unknown> {
+  const row = db.prepare("SELECT value FROM kv WHERE key = ?").get(key) as { value: string } | undefined;
+  return row ? JSON.parse(row.value) : null;
+}
+
+export async function kvSet(key: string, value: unknown) {
+  db.prepare("INSERT INTO kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(
+    key,
+    JSON.stringify(value),
+  );
+}
+
+export async function kvDel(key: string) {
+  db.prepare("DELETE FROM kv WHERE key = ?").run(key);
+}
 
 // --- read helpers -----------------------------------------------------------
 

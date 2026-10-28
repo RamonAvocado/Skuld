@@ -1,18 +1,11 @@
 "use client";
 
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Button } from "@mimird/ui/components/button";
+import { Input } from "@mimird/ui/components/input";
+import { Label } from "@mimird/ui/components/label";
 import { updatePlannedTest } from "@/lib/actions";
 import { FormSelect } from "@/components/form-select";
+import { FormDialog } from "@/components/form-dialog";
 
 export function EditPlannedTestDialog({
   id,
@@ -30,25 +23,22 @@ export function EditPlannedTestDialog({
   className?: string;
 }) {
   return (
-    <Dialog>
-      <DialogTrigger
-        render={
-          <button
-            type="button"
-            className={
-              className ??
-              "rounded-sm text-left underline-offset-2 hover:underline focus-visible:underline focus-visible:outline-none"
-            }
-          />
-        }
-      >
-        {title}
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Edit test</DialogTitle>
-          <DialogDescription>Rename it and file it under a group.</DialogDescription>
-        </DialogHeader>
+    <FormDialog
+      title="Edit test"
+      description="Rename it and file it under a group."
+      trigger={(open) => (
+        <button
+          type="button"
+          onClick={open}
+          className={
+            className ??
+            "rounded-sm text-left underline-offset-2 hover:underline focus-visible:underline focus-visible:outline-none"
+          }
+        >
+          {title}
+        </button>
+      )}
+    >
         <form action={updatePlannedTest} className="grid gap-3">
           <input type="hidden" name="id" value={id} />
           <input type="hidden" name="project_id" value={projectId} />
@@ -64,7 +54,6 @@ export function EditPlannedTestDialog({
             Save
           </Button>
         </form>
-      </DialogContent>
-    </Dialog>
+    </FormDialog>
   );
 }

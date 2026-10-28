@@ -7,11 +7,11 @@ import { PerfChart } from "@/components/perf-chart";
 import { FormSelect } from "@/components/form-select";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { Chevron, detailsCls, summaryCls } from "@/components/disclosure";
-import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@mimird/ui/components/card";
+import { Button } from "@mimird/ui/components/button";
+import { Input } from "@mimird/ui/components/input";
+import { Badge } from "@mimird/ui/components/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@mimird/ui/components/table";
 
 const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"].map((m) => ({ value: m, label: m }));
 
@@ -45,6 +45,7 @@ export function PerfPanel({ projectId, kind }: { projectId: number; kind: PerfKi
   const series = perfSeries(projectId, kind);
   const isPage = kind === "page";
   const noun = isPage ? "page" : "endpoint";
+  const Noun = isPage ? "Page" : "Endpoint";
 
   return (
     <div className="grid gap-4">
@@ -72,7 +73,7 @@ export function PerfPanel({ projectId, kind }: { projectId: number; kind: PerfKi
             )}
             <RunButton
               projectId={projectId}
-              label={isPage ? "Run pages" : "Run endpoints"}
+              label={isPage ? "Run Pages" : "Run Endpoints"}
               variant="outline"
               action={runPerfAction}
               kind={kind}
@@ -130,12 +131,12 @@ export function PerfPanel({ projectId, kind }: { projectId: number; kind: PerfKi
                       <input type="hidden" name="id" value={e.id} />
                       <input type="hidden" name="project_id" value={projectId} />
                       <ConfirmSubmitButton
-                        type="submit"
                         size="sm"
                         variant="ghost"
-                        confirmMessage={`Delete ${e.path}? Past results stay in run history.`}
+                        confirmTitle={`Delete ${e.path}?`}
+                        confirmMessage="Past results stay in run history."
                       >
-                        Delete {noun}
+                        Delete {Noun}
                       </ConfirmSubmitButton>
                     </form>
                   </div>
@@ -160,7 +161,7 @@ export function PerfPanel({ projectId, kind }: { projectId: number; kind: PerfKi
               <Input name="body" aria-label="JSON body" placeholder="JSON body (optional)" className="w-48 font-mono text-sm" />
             )}
             <Button type="submit" variant="outline">
-              Add {noun}
+              Add {Noun}
             </Button>
           </form>
         </CardContent>

@@ -1,3 +1,4 @@
+import { Hint } from "@mimird/ui/components/tooltip";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -37,12 +38,12 @@ import { Chevron, detailsCls, summaryCls } from "@/components/disclosure";
 import { EvolutionChart } from "@/components/evolution-chart";
 import { ErrToast } from "@/components/err-toast";
 import { PerfPanel } from "@/components/perf-panel";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@mimird/ui/components/tabs";
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@mimird/ui/components/card";
+import { Button } from "@mimird/ui/components/button";
+import { Input } from "@mimird/ui/components/input";
+import { Label } from "@mimird/ui/components/label";
+import { Badge } from "@mimird/ui/components/badge";
 import {
   Table,
   TableBody,
@@ -50,7 +51,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@mimird/ui/components/table";
 
 export const dynamic = "force-dynamic";
 
@@ -259,11 +260,11 @@ export default async function ProjectPage({
                                 <form action={togglePlannedStatus}>
                                   <input type="hidden" name="id" value={p.id} />
                                   <input type="hidden" name="project_id" value={projectId} />
+                                  <Hint label={p.status === "done" ? "Mark as not done" : "Mark as done"}>
                                   <button
                                     type="submit"
                                     aria-label={p.status === "done" ? "Mark as not done" : "Mark as done"}
                                     aria-pressed={p.status === "done"}
-                                    title="Toggle done"
                                     className={cn(
                                       "flex size-4 items-center justify-center rounded-[4px] border border-input transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30",
                                       p.status === "done" &&
@@ -272,6 +273,7 @@ export default async function ProjectPage({
                                   >
                                     {p.status === "done" && <CheckIcon className="size-3.5" />}
                                   </button>
+                                  </Hint>
                                 </form>
                               </TableCell>
                               <TableCell className={p.status === "done" ? "line-through text-muted-foreground" : ""}>
@@ -299,15 +301,11 @@ export default async function ProjectPage({
                                 <form action={deletePlannedTest}>
                                   <input type="hidden" name="id" value={p.id} />
                                   <input type="hidden" name="project_id" value={projectId} />
-                                  <Button
-                                    type="submit"
-                                    size="icon-sm"
-                                    variant="ghost"
-                                    title="Delete test"
-                                    aria-label={`Delete "${p.title}"`}
-                                  >
-                                    <XIcon />
-                                  </Button>
+                                  <Hint label="Delete Test">
+                                    <Button type="submit" size="icon-sm" variant="ghost" aria-label={`Delete "${p.title}"`}>
+                                      <XIcon />
+                                    </Button>
+                                  </Hint>
                                 </form>
                               </TableCell>
                             </DraggableRow>
@@ -330,7 +328,7 @@ export default async function ProjectPage({
                     />
                     <FormSelect name="layer" aria-label="Layer" defaultValue="unit" options={layerOptions} />
                     <Button type="submit" variant="outline">
-                      Add test
+                      Add Test
                     </Button>
                   </form>
                   )}
@@ -347,7 +345,7 @@ export default async function ProjectPage({
               <Input id="area-name" name="name" placeholder="Auth, Listing, Billing…" className="w-64" required />
             </div>
             <Button type="submit" variant="outline">
-              Add area
+              Add Area
             </Button>
           </form>
         </TabsContent>

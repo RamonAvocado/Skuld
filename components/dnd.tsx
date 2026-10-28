@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { TableRow } from "@/components/ui/table";
+import { TableRow } from "@mimird/ui/components/table";
 import { movePlannedTest } from "@/lib/actions";
 
 // Native HTML5 drag & drop. Keyboard fallback: the Edit dialog's Group select.

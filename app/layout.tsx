@@ -1,18 +1,16 @@
 import type { Metadata, Viewport } from "next";
-import { Plus_Jakarta_Sans, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { Toaster } from "@/components/ui/sonner";
+import { Toaster } from "@mimird/ui/components/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
-import { Sidebar } from "@/components/sidebar";
-import { listProjects } from "@/lib/db";
 
-const sans = Plus_Jakarta_Sans({
-  variable: "--font-sans",
+const sans = Geist({
+  variable: "--font-geist-sans",
   subsets: ["latin"],
 });
 
 const geistMono = Geist_Mono({
-  variable: "--font-mono",
+  variable: "--font-geist-mono",
   subsets: ["latin"],
 });
 
@@ -29,10 +27,6 @@ export const viewport: Viewport = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  // node:sqlite rows have a null prototype — plain-object them before
-  // crossing the server→client boundary into Sidebar.
-  const projects = listProjects().map((p) => ({ id: p.id, name: p.name }));
-
   return (
     <html
       lang="en"
@@ -47,10 +41,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           >
             Skip to content
           </a>
-          <Sidebar projects={projects} />
-          <main id="main" className="min-w-0 flex-1 overflow-y-auto p-8">
-            <div className="mx-auto w-full max-w-5xl">{children}</div>
-          </main>
+          {children}
           <Toaster />
         </ThemeProvider>
       </body>

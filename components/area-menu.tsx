@@ -1,5 +1,6 @@
 "use client";
 
+import { Hint } from "@mimird/ui/components/tooltip";
 import { SettingsIcon, Trash2Icon } from "lucide-react";
 import {
   DropdownMenu,
@@ -7,7 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@mimird/ui/components/dropdown-menu";
-import { buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@mimird/ui/components/button";
 import { deleteArea } from "@/lib/actions";
 
 export function AreaMenu({
@@ -34,17 +35,18 @@ export function AreaMenu({
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger
-        aria-label={`"${name}" settings`}
-        title="Area settings"
-        className={buttonVariants({ variant: "ghost", size: "icon-sm" })}
-      >
-        <SettingsIcon aria-hidden />
-      </DropdownMenuTrigger>
+      <Hint label="Area Settings">
+        <DropdownMenuTrigger
+          aria-label={`"${name}" settings`}
+          className={buttonVariants({ variant: "ghost", size: "icon-sm" })}
+        >
+          <SettingsIcon aria-hidden />
+        </DropdownMenuTrigger>
+      </Hint>
       <DropdownMenuContent align="end">
         <DropdownMenuItem variant="destructive" onClick={remove}>
           <Trash2Icon aria-hidden />
-          Delete area
+          Delete Area
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

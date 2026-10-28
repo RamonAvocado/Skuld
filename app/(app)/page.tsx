@@ -9,7 +9,7 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
+} from "@mimird/ui/components/card";
 
 export const dynamic = "force-dynamic";
 

@@ -1,3 +1,4 @@
+import { Hint } from "@mimird/ui/components/tooltip";
 export type LanguageShare = { language: string; n: number };
 
 const COLORS: Record<string, string> = {
@@ -36,11 +37,9 @@ export function LanguageBar({ data, compact }: { data: LanguageShare[]; compact?
         className="flex h-2 w-full overflow-hidden rounded-full bg-muted"
       >
         {shares.map((s) => (
-          <div
-            key={s.language}
-            style={{ width: `${s.pct * 100}%`, backgroundColor: colorFor(s.language) }}
-            title={`${labelFor(s.language)} ${Math.round(s.pct * 100)}%`}
-          />
+          <Hint key={s.language} label={`${labelFor(s.language)} ${Math.round(s.pct * 100)}%`}>
+            <div style={{ width: `${s.pct * 100}%`, backgroundColor: colorFor(s.language) }} />
+          </Hint>
         ))}
       </div>
       {!compact && (

@@ -110,3 +110,20 @@ test("autoImportDiscoveredTests never creates a second row for a key already tra
   // no auto area needed to be created for this key, or if one exists it's empty
   expect(autoArea === undefined || plannedForArea(autoArea.id).length === 0).toBe(true);
 });
+
+test("kv round-trips JSON and deletes", async () => {
+  const { kvGet, kvSet, kvDel } = await import("./db");
+  expect(await kvGet("missing")).toBeNull();
+  await kvSet("user:a@b.c", { id: "1", email: "a@b.c" });
+  await kvSet("user:a@b.c", { id: "1", email: "a@b.c", name: "A" });
+  expect(await kvGet("user:a@b.c")).toEqual({ id: "1", email: "a@b.c", name: "A" });
+  await kvDel("user:a@b.c");
+  expect(await kvGet("user:a@b.c")).toBeNull();
+});
+
+test("kv satisfies @mimird/auth's UserStore contract", async () => {
+  const { kvGet, kvSet, kvDel } = await import("./db");
+  const { kvStore } = await import("@mimird/auth/store-adapter");
+  const { testStore } = await import("@mimird/auth/testing");
+  await testStore(kvStore({ get: kvGet, set: kvSet, del: kvDel }));
+});

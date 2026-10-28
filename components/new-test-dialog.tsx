@@ -1,20 +1,14 @@
 "use client";
 
 import { PlusIcon } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Hint } from "@mimird/ui/components/tooltip";
+import { Button } from "@mimird/ui/components/button";
+import { Input } from "@mimird/ui/components/input";
+import { Label } from "@mimird/ui/components/label";
 import { createPlannedTest } from "@/lib/actions";
 import { LAYERS } from "@/lib/presets";
 import { FormSelect } from "@/components/form-select";
+import { FormDialog } from "@/components/form-dialog";
 
 export function NewTestDialog({
   projectId,
@@ -24,18 +18,26 @@ export function NewTestDialog({
   areas: { id: number; name: string }[];
 }) {
   return (
-    <Dialog>
-      <DialogTrigger
-        render={<Button size="sm" variant="outline" disabled={areas.length === 0} title={areas.length === 0 ? "Add an area first" : undefined} />}
-      >
-        <PlusIcon aria-hidden />
-        New test
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>New test</DialogTitle>
-          <DialogDescription>A test you want to add. It starts as TODO; drag it to another area anytime.</DialogDescription>
-        </DialogHeader>
+    <FormDialog
+      title="New test"
+      description="A test you want to add. It starts as TODO; drag it to another area anytime."
+      trigger={(open) => {
+        const button = (
+          <Button size="sm" variant="outline" disabled={areas.length === 0} onClick={open}>
+            <PlusIcon aria-hidden />
+            New Test
+          </Button>
+        );
+        // a disabled button gets no pointer events, so the hint sits on a wrapper
+        return areas.length === 0 ? (
+          <Hint label="Add an area first">
+            <span tabIndex={0}>{button}</span>
+          </Hint>
+        ) : (
+          button
+        );
+      }}
+    >
         <form action={createPlannedTest} className="grid gap-3">
           <input type="hidden" name="project_id" value={projectId} />
           <div className="grid gap-1.5">
@@ -51,10 +53,9 @@ export function NewTestDialog({
             <FormSelect name="area_id" aria-label="Area" options={areas.map((a) => ({ value: String(a.id), label: a.name }))} />
           </div>
           <Button type="submit" className="w-fit">
-            Add test
+            Add Test
           </Button>
         </form>
-      </DialogContent>
-    </Dialog>
+    </FormDialog>
   );
 }

@@ -11,6 +11,11 @@ services:
         VERSION: ${VERSION:-dev}
     ports:
       - "3003:3003"
+    environment:
+      # Sign-in (@mimird/auth). Both are required in production; set them in your shell or a .env.
+      APP_ENV: production
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET (32+ chars)}
+      APP_URL: ${APP_URL:-http://localhost:3003}
     volumes:
       - skuld-data:/data
       # Skuld runs test commands inside the projects it tracks, so mount each checkout

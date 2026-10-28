@@ -1,9 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
+import { Input } from "@mimird/ui/components/input";
+import { Label } from "@mimird/ui/components/label";
+import { Chevron, summaryCls } from "@/components/disclosure";
 import { LANGUAGES, FRAMEWORKS_BY_LANGUAGE, LAYERS, findPreset, type Language } from "@/lib/presets";
 import { FormSelect } from "@/components/form-select";
 
@@ -98,11 +98,13 @@ export function SuiteFields({
         </div>
       </div>
 
-      <Accordion keepMounted defaultValue={[]}>
-        <AccordionItem value="advanced">
-          <AccordionTrigger>Advanced: command &amp; paths</AccordionTrigger>
-          <AccordionContent>
-            <div className="grid gap-3 pt-1">
+      {/* native <details>: closed fields stay mounted, so they still submit */}
+      <details className="group">
+        <summary className={`${summaryCls} font-medium`}>
+          <Chevron />
+          Advanced: command &amp; paths
+        </summary>
+            <div className="grid gap-3 pt-3">
               <div className="grid gap-1.5">
                 <Label htmlFor="suite-command">Test command</Label>
                 <Input
@@ -152,9 +154,7 @@ export function SuiteFields({
                 </div>
               </div>
             </div>
-          </AccordionContent>
-        </AccordionItem>
-      </Accordion>
+      </details>
     </div>
   );
 }

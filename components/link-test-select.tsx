@@ -1,8 +1,9 @@
 "use client";
 
+import { Hint } from "@mimird/ui/components/tooltip";
 import { XIcon } from "lucide-react";
 import { SearchSelect } from "@mimird/ui/components/search-select";
-import { Button } from "@/components/ui/button";
+import { Button } from "@mimird/ui/components/button";
 import { linkPlannedToDiscovered } from "@/lib/actions";
 
 // Links a planned test to one discovered test. SearchSelect picks several,
@@ -32,20 +33,17 @@ export function LinkTestSelect({
     <div className="grid max-w-80 gap-1">
       {current && (
         <span className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
-          <span className="truncate" title={current}>
-            {current}
-            {!keys.includes(current) && " (not in last run)"}
-          </span>
-          <Button
-            type="button"
-            size="icon-xs"
-            variant="ghost"
-            aria-label={`Unlink "${title}"`}
-            title="Unlink"
-            onClick={() => link("")}
-          >
-            <XIcon />
-          </Button>
+          <Hint label={current}>
+            <span className="truncate">
+              {current}
+              {!keys.includes(current) && " (not in last run)"}
+            </span>
+          </Hint>
+          <Hint label="Unlink">
+            <Button type="button" size="icon-xs" variant="ghost" aria-label={`Unlink "${title}"`} onClick={() => link("")}>
+              <XIcon />
+            </Button>
+          </Hint>
         </span>
       )}
       <SearchSelect

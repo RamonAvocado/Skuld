@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { Hint } from "@mimird/ui/components/tooltip";
 import { FlaskConicalIcon, GaugeIcon, SettingsIcon } from "lucide-react";
 import { Modal } from "@mimird/ui/components/modal";
 import { Separator } from "@mimird/ui/components/separator";
@@ -19,11 +20,11 @@ import { setHash, useHash } from "@/lib/use-hash";
 import { SuiteFields } from "@/components/suite-fields";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { Chevron, detailsCls, summaryCls } from "@/components/disclosure";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from "@mimird/ui/components/button";
+import { Input } from "@mimird/ui/components/input";
+import { Label } from "@mimird/ui/components/label";
+import { Badge } from "@mimird/ui/components/badge";
+import { Switch } from "@mimird/ui/components/switch";
 
 // Each value is the URL fragment that opens it, as in Mimird-Web's settings.
 const SECTIONS = [
@@ -67,16 +68,11 @@ export function ProjectSettings({
 
   return (
     <>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        aria-label="Project settings"
-        title="Project settings"
-        onClick={() => setHash("settings/general")}
-      >
-        <SettingsIcon aria-hidden />
-      </Button>
+      <Hint label="Project Settings">
+        <Button type="button" variant="ghost" size="icon" aria-label="Project settings" onClick={() => setHash("settings/general")}>
+          <SettingsIcon aria-hidden />
+        </Button>
+      </Hint>
       <Modal
         open={open}
         onOpenChange={(o) => setHash(o ? "settings/general" : "")}
@@ -109,16 +105,16 @@ export function ProjectSettings({
               <fieldset className="grid gap-2">
                 <legend className="mb-1.5 text-sm font-medium">Parts</legend>
                 <label className="flex w-fit cursor-pointer items-center gap-2 text-sm">
-                  <Checkbox name="enable_tests" defaultChecked={project.enable_tests === 1} />
+                  <Switch name="enable_tests" defaultChecked={project.enable_tests === 1} />
                   Tests
                 </label>
                 <label className="flex w-fit cursor-pointer items-center gap-2 text-sm">
-                  <Checkbox name="enable_perf" defaultChecked={project.enable_perf === 1} />
+                  <Switch name="enable_perf" defaultChecked={project.enable_perf === 1} />
                   Performance
                 </label>
               </fieldset>
               <label className="flex w-fit cursor-pointer items-center gap-2 text-sm">
-                <Checkbox name="git_push" defaultChecked={project.git_push === 1} />
+                <Switch name="git_push" defaultChecked={project.git_push === 1} />
                 Git push after commit
               </label>
               <p className="-mt-2 text-xs text-muted-foreground">
@@ -142,12 +138,12 @@ export function ProjectSettings({
               <form action={deleteProject}>
                 <input type="hidden" name="id" value={projectId} />
                 <ConfirmSubmitButton
-                  type="submit"
                   variant="destructive"
                   size="sm"
-                  confirmMessage={`Delete project "${project.name}"? All runs and planned tests will be lost. This can't be undone.`}
+                  confirmTitle={`Delete project "${project.name}"?`}
+                  confirmMessage="All runs and planned tests will be lost. This can't be undone."
                 >
-                  Delete project
+                  Delete Project
                 </ConfirmSubmitButton>
               </form>
             </div>
@@ -178,19 +174,19 @@ export function ProjectSettings({
                       defaultCoveragePath={suite.coverage_xml_path}
                     />
                     <Button type="submit" size="sm" variant="outline" className="w-fit">
-                      Save suite
+                      Save Suite
                     </Button>
                   </form>
                   <form action={deleteSuite}>
                     <input type="hidden" name="id" value={suite.id} />
                     <input type="hidden" name="project_id" value={projectId} />
                     <ConfirmSubmitButton
-                      type="submit"
                       size="sm"
                       variant="ghost"
-                      confirmMessage={`Delete suite "${suite.name || suite.framework}"? Past results stay in run history.`}
+                      confirmTitle={`Delete suite "${suite.name || suite.framework}"?`}
+                      confirmMessage="Past results stay in run history."
                     >
-                      Delete suite
+                      Delete Suite
                     </ConfirmSubmitButton>
                   </form>
                 </div>
@@ -206,7 +202,7 @@ export function ProjectSettings({
                 <input type="hidden" name="project_id" value={projectId} />
                 <SuiteFields defaultLanguage="other" defaultFramework="other" defaultLayer="unit" />
                 <Button type="submit" size="sm" variant="outline" className="w-fit">
-                  Add suite
+                  Add Suite
                 </Button>
               </form>
             </details>
