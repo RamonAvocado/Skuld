@@ -4,7 +4,9 @@ import { notFound } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { ArrowLeftIcon, CheckIcon, XIcon } from "lucide-react";
 import {
-  getProject,
+  getProjectByUuid,
+  listPerfEntries,
+  listPerfRuns,
   latestRun,
   listRuns,
   runSeries,
@@ -37,7 +39,8 @@ import { RunButton } from "@/components/run-button";
 import { Chevron, detailsCls, summaryCls } from "@/components/disclosure";
 import { EvolutionChart } from "@/components/evolution-chart";
 import { ErrToast } from "@/components/err-toast";
-import { PerfPanel } from "@/components/perf-panel";
+import { PerfPanel, ms, delta } from "@/components/perf-panel";
+import { UrlTabs } from "@/components/url-tabs";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@mimird/ui/components/tabs";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@mimird/ui/components/card";
 import { Button } from "@mimird/ui/components/button";
@@ -64,13 +67,13 @@ export default async function ProjectPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ err?: string }>;
+  searchParams: Promise<{ err?: string; tab?: string }>;
 }) {
   const { id } = await params;
-  const { err } = await searchParams;
-  const projectId = Number(id);
-  const project = getProject(projectId);
+  const { err, tab } = await searchParams;
+  const project = getProjectByUuid(id);
   if (!project) notFound();
+  const projectId = project.id;
 
   const last = latestRun(projectId);
   const series = runSeries(projectId);
@@ -83,9 +86,13 @@ export default async function ProjectPage({
   // crossing the server→client boundary into EditPlannedTestDialog.
   const areaOptions = areas.map((a) => ({ id: a.id, name: a.name }));
   const discoveredKeys = discovered.map((d) => d.key);
+  // Each linked test's time in the latest run vs the run before it.
+  const duration = new Map(discovered.map((d) => [d.key, d.duration_ms]));
+  const prevDuration = new Map(runs[1] ? discoveredForRun(runs[1].id).map((d) => [d.key, d.duration_ms]) : []);
   const suites = listSuites(projectId).map((s) => ({ ...s }));
   const tests = project.enable_tests === 1;
   const perf = project.enable_perf === 1;
+  const activeTab = tab === "test" && tests ? "test" : tab === "performance" && perf ? "performance" : "overview";
 
   return (
     <div className="grid gap-6">
@@ -102,13 +109,11 @@ export default async function ProjectPage({
           <h1 className="truncate text-xl font-semibold">{project.name}</h1>
         </div>
         <div className="flex items-center gap-2">
-          {tests && <RunButton projectId={projectId} />}
           <ProjectSettings
             project={{
               id: project.id,
               name: project.name,
               root_dir: project.root_dir,
-              git_push: project.git_push,
               enable_tests: project.enable_tests,
               enable_perf: project.enable_perf,
               api_base_url: project.api_base_url,
@@ -124,16 +129,11 @@ export default async function ProjectPage({
         </div>
       </div>
 
-      {!tests && !perf && (
-        <p className="text-sm text-muted-foreground">Turn on tests or performance in the project settings.</p>
-      )}
-
-      <Tabs defaultValue={tests ? "overview" : "performance"} className={cn(!tests && !perf && "hidden")}>
+      <UrlTabs defaultValue={activeTab}>
         <div className="-mx-4 overflow-x-auto overflow-y-hidden px-4 sm:mx-0 sm:px-0">
           <TabsList>
-            {tests && <TabsTrigger value="overview">Overview</TabsTrigger>}
-            {tests && <TabsTrigger value="roadmap">Tests</TabsTrigger>}
-            {tests && <TabsTrigger value="runs">Runs ({runs.length})</TabsTrigger>}
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            {tests && <TabsTrigger value="test">Tests</TabsTrigger>}
             {perf && <TabsTrigger value="performance">Performance</TabsTrigger>}
           </TabsList>
         </div>
@@ -158,36 +158,68 @@ export default async function ProjectPage({
 
         {/* -------- Overview -------- */}
         <TabsContent value="overview" className="grid gap-4 pt-4">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Tile label="Line coverage" value={last ? pct(last.line_rate) : "—"} />
-            <Tile label="Tests" value={last ? String(last.total) : "—"} />
-            <Tile
-              label="Passing"
-              value={last ? `${last.passed}/${last.total}` : "—"}
-              tone={last && last.failed > 0 ? "bad" : "ok"}
-            />
-            <Tile label="TODO left" value={String(todo.length)} />
-          </div>
-          <Card>
-            <CardHeader>
-              <CardTitle>Test composition</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <LanguageBar data={langData} />
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>Evolution</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <EvolutionChart data={series} />
-            </CardContent>
-          </Card>
+          {!tests && !perf && (
+            <p className="text-sm text-muted-foreground">Turn on tests or performance in the project settings.</p>
+          )}
+          {tests && (
+            <section className="grid gap-3">
+              <h2 className="font-medium">Tests</h2>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <Tile label="Line coverage" value={last ? pct(last.line_rate) : "—"} />
+                <Tile label="Tests" value={last ? String(last.total) : "—"} />
+                <Tile
+                  label="Passing"
+                  value={last ? `${last.passed}/${last.total}` : "—"}
+                  tone={last && last.failed > 0 ? "bad" : "ok"}
+                />
+                <Tile label="TODO left" value={String(todo.length)} />
+              </div>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Test composition</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <LanguageBar data={langData} />
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Evolution</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <EvolutionChart data={series} />
+                </CardContent>
+              </Card>
+            </section>
+          )}
+          {perf && (
+            <section className="grid gap-3">
+              <h2 className="font-medium">Performance</h2>
+              {(["endpoint", "page"] as const).map((kind) => {
+                const count = listPerfEntries(projectId, kind).length;
+                const [lastPerf] = listPerfRuns(projectId, kind);
+                return (
+                  <div key={kind} className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    <Tile label={kind === "page" ? "Pages" : "Endpoints"} value={String(count)} />
+                    <Tile label="Last run" value={lastPerf ? new Date(lastPerf.finished_at).toLocaleDateString() : "—"} />
+                    <Tile
+                      label="Failing"
+                      value={lastPerf ? String(lastPerf.failed) : "—"}
+                      tone={lastPerf && lastPerf.failed > 0 ? "bad" : "ok"}
+                    />
+                    <Tile label="Total time" value={lastPerf ? ms(lastPerf.total_ms) : "—"} />
+                  </div>
+                );
+              })}
+            </section>
+          )}
         </TabsContent>
 
         {/* -------- Tests -------- */}
-        <TabsContent value="roadmap" className="grid gap-4 pt-4">
+        <TabsContent value="test" className="grid gap-4 pt-4">
+          <div className="flex justify-end">
+            <RunButton projectId={projectId} />
+          </div>
           <Card>
             <CardHeader>
               <CardTitle>TODO — {todo.length} tests left to add</CardTitle>
@@ -250,6 +282,7 @@ export default async function ProjectPage({
                             <TableHead>Test</TableHead>
                             <TableHead>Layer</TableHead>
                             <TableHead>Linked to discovered test</TableHead>
+                            <TableHead className="text-right">Duration</TableHead>
                             <TableHead className="w-8" />
                           </TableRow>
                         </TableHeader>
@@ -296,6 +329,18 @@ export default async function ProjectPage({
                                   current={p.discovered_test_key}
                                   keys={discoveredKeys}
                                 />
+                              </TableCell>
+                              <TableCell className="text-right tabular-nums whitespace-nowrap">
+                                {p.discovered_test_key && duration.has(p.discovered_test_key) ? (
+                                  <>
+                                    {ms(duration.get(p.discovered_test_key)!)}{" "}
+                                    <span className="text-muted-foreground">
+                                      {delta(duration.get(p.discovered_test_key)!, prevDuration.get(p.discovered_test_key))}
+                                    </span>
+                                  </>
+                                ) : (
+                                  <span className="text-muted-foreground">—</span>
+                                )}
                               </TableCell>
                               <TableCell>
                                 <form action={deletePlannedTest}>
@@ -348,10 +393,9 @@ export default async function ProjectPage({
               Add Area
             </Button>
           </form>
-        </TabsContent>
-
-        {/* -------- Runs -------- */}
-        <TabsContent value="runs" className="grid gap-3 pt-4">
+          <h2 className="mt-2 font-medium">
+            Runs <span className="text-sm font-normal text-muted-foreground tabular-nums">{runs.length}</span>
+          </h2>
           {runs.length === 0 && <p className="text-sm text-muted-foreground">No runs yet.</p>}
           {runs.map((r) => {
             const tests = discoveredForRun(r.id);
@@ -372,7 +416,6 @@ export default async function ProjectPage({
                     {r.failed > 0 && <span className="text-destructive"> · {r.failed} failing</span>} · exit{" "}
                     {r.exit_code}
                   </span>
-                  <Badge variant="secondary">git {r.git_status}</Badge>
                 </summary>
                 <div className="mt-3 grid gap-4 md:grid-cols-2">
                   <div className="min-w-0">
@@ -409,7 +452,7 @@ export default async function ProjectPage({
             );
           })}
         </TabsContent>
-      </Tabs>
+      </UrlTabs>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 # Skuld
 
-Run another project's test suite, inventory its tests, track coverage over time,
-and version every coverage snapshot in git.
+Run another project's test suite, inventory its tests, track coverage and
+endpoint/page performance over time.
 
 ## Run
 
@@ -28,26 +28,33 @@ optional (`GOOGLE_CLIENT_ID`/`_SECRET`, `GITHUB_CLIENT_ID`/`_SECRET`).
    `pytest --junitxml=.skuld/junit.xml --cov --cov-report=xml:.skuld/coverage.xml`
    Any framework works if it can produce those two files. No setup step —
    just point it at a checkout.
-2. **Run tests**: executes the command in the project dir, parses the reports, stores a
-   run, then writes a timestamped snapshot to `<project>/.skuld/history/` and commits it
-   to *that project's own git repo* (scoped to `.skuld/` only — never touches other
-   uncommitted work). No separate coverage repo to configure. If the project directory
-   isn't a git repo, this step is skipped and the run still succeeds.
-   Enable "git push after commit" in a project's settings (the cog) to also push each snapshot
-   commit (off by default, since it uses that project's real `origin`).
+2. **Run tests** (Tests tab): executes each suite in the project dir, parses the reports and
+   stores a run. The run history sits under the button.
 3. **Tests**: group planned tests by feature area (Auth, Listing…), mark them
    done, link each to a real discovered test. The TODO list = everything still `todo`.
-4. **Overview**: line chart of coverage % and test count across all runs.
+4. **Overview**: test tiles + coverage/test-count chart, and the latest endpoint/page
+   performance numbers. Tabs are in the URL: `?tab=test`, `?tab=performance`. Project URLs use the project's uuid.
+
+## CLI
+
+`bun run skuld help` lists, adds and re-categorizes planned tests, areas and performance
+entries straight in the db (same `SKULD_DB`). Refresh the page to see changes.
+
+```bash
+bun run skuld projects
+bun run skuld tests add my-api Auth --layer e2e "rejects expired token" "logs out"
+bun run skuld tests move Billing 12 13
+bun run skuld perf add my-api endpoint --area Usage /api/v1/usage /api/v1/limits
+```
 
 ## Checks
 
 ```bash
 bun test lib/parse.test.ts   # JUnit + Cobertura parsers
-bun scripts/selftest.ts      # run + git-snapshot pipeline (no pytest needed)
+bun scripts/selftest.ts      # run pipeline + CLI (no pytest needed)
 ```
 
 ## Known ceilings
 
 - A run is a blocking server action (20-min exec timeout). Add a job queue if suites get slower.
 - planned↔discovered linking is manual.
-- `git push` relies on the project's own repo already having working `origin` auth.

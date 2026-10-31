@@ -117,7 +117,7 @@ function open(): DatabaseSync {
     );
 
     -- label is the entry's method + path at run time, so history survives a deleted entry.
-    -- Endpoints: ms = full body received, ttfb = headers received, bytes = decoded body.
+    -- Endpoints (GET only): ms/ttfb = medians of 10 timed calls, p95 = slowest-5% time, bytes = decoded body.
     -- Pages: ms = onLoad, bytes = transferred, plus requests/fcp/lcp; medians over sitespeed's runs.
     CREATE TABLE IF NOT EXISTS perf_results (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -182,8 +182,19 @@ function open(): DatabaseSync {
       /* column already exists */
     }
   }
+  // Public id used in URLs; the integer id stays internal (foreign keys).
+  try {
+    db.exec("ALTER TABLE projects ADD COLUMN uuid TEXT");
+  } catch {
+    /* column already exists */
+  }
+  for (const { id } of db.prepare("SELECT id FROM projects WHERE uuid IS NULL").all() as { id: number }[]) {
+    db.prepare("UPDATE projects SET uuid = ? WHERE id = ?").run(crypto.randomUUID(), id);
+  }
+  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_projects_uuid ON projects(uuid)");
   // A page's own sitespeed.io report, relative to REPORTS_DIR.
-  for (const col of ["report_path TEXT NOT NULL DEFAULT ''"]) {
+  // p95: endpoints only (pages report sitespeed.io's medians).
+  for (const col of ["report_path TEXT NOT NULL DEFAULT ''", "p95 REAL NOT NULL DEFAULT 0"]) {
     try {
       db.exec(`ALTER TABLE perf_results ADD COLUMN ${col}`);
     } catch {
@@ -224,7 +235,7 @@ export type Project = {
   test_command: string;
   junit_path: string;
   coverage_xml_path: string;
-  git_push: number;
+  uuid: string;
   legacy_migrated: number;
   created_at: string;
   enable_tests: number;
@@ -264,7 +275,6 @@ export type RunRow = {
   skipped: number;
   line_rate: number;
   branch_rate: number;
-  git_status: string;
   log: string;
 };
 
@@ -274,6 +284,10 @@ export function listProjects(): Project[] {
 
 export function getProject(id: number): Project | undefined {
   return db.prepare("SELECT * FROM projects WHERE id = ?").get(id) as Project | undefined;
+}
+
+export function getProjectByUuid(uuid: string): Project | undefined {
+  return db.prepare("SELECT * FROM projects WHERE uuid = ?").get(uuid) as Project | undefined;
 }
 
 export function latestRun(projectId: number): RunRow | undefined {
@@ -505,6 +519,7 @@ export type PerfResult = {
   area: string;
   status: number;
   ms: number;
+  p95: number;
   ttfb: number;
   bytes: number;
   requests: number;

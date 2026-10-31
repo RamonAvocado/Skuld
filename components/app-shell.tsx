@@ -40,7 +40,7 @@ function Logo() {
   );
 }
 
-function Nav({ projects, onNavigate }: { projects: { id: number; name: string }[]; onNavigate?: () => void }) {
+function Nav({ projects, onNavigate }: { projects: { uuid: string; name: string }[]; onNavigate?: () => void }) {
   const pathname = usePathname();
   // a project stays lit on its sub-pages
   const active = (href: string) => (href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`));
@@ -51,11 +51,11 @@ function Nav({ projects, onNavigate }: { projects: { id: number; name: string }[
       {projects.length > 0 && <Separator className="my-2 bg-border/70" />}
       {projects.map((p) => (
         <SidebarItem
-          key={p.id}
-          render={<Link href={`/projects/${p.id}`} onClick={onNavigate} />}
+          key={p.uuid}
+          render={<Link href={`/projects/${p.uuid}`} onClick={onNavigate} />}
           icon={FolderIcon}
           label={p.name}
-          active={active(`/projects/${p.id}`)}
+          active={active(`/projects/${p.uuid}`)}
         />
       ))}
     </>
@@ -84,7 +84,7 @@ export function AppShell({
   children,
 }: {
   user: User;
-  projects: { id: number; name: string }[];
+  projects: { uuid: string; name: string }[];
   defaultCollapsed?: boolean;
   children: React.ReactNode;
 }) {

@@ -38,7 +38,7 @@ export function PerfChart({ data, isPage }: { data: PerfPoint[]; isPage: boolean
             yAxisId="ms"
             type="monotone"
             dataKey="ms"
-            name={isPage ? "Load (ms)" : "Time (ms)"}
+            name={isPage ? "Load (ms)" : "Median (ms)"}
             stroke="var(--foreground)"
             strokeWidth={2}
             dot={rows.length === 1}

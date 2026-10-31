@@ -107,6 +107,11 @@ For more information, read the Bun API docs in `node_modules/bun-types/docs/**.m
 
 <!-- BEGIN:nextjs-agent-rules -->
 
+## Skuld CLI
+
+To list, add or categorize a project's planned tests, areas or performance endpoints/pages,
+use `bun run skuld help` (scripts/skuld.ts) instead of editing the db or clicking through the UI.
+
 # This is NOT the Next.js you know
 
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.

@@ -1,8 +1,7 @@
 /**
- * Integration check for the run + git-snapshot pipeline (no pytest needed).
+ * Integration check for the run pipeline and the CLI (no pytest needed).
  * Seeds a temp project whose "test command" just emits JUnit + Cobertura XML,
- * runs it through runProject(), and asserts a run row + a commit landed in
- * the project's own repo, scoped to .skuld/ only.
+ * runs it through runProject(), asserts the run row, then drives scripts/skuld.ts.
  *
  *   bun scripts/selftest.ts
  */
@@ -17,11 +16,6 @@ process.env.SKULD_DB = join(work, "test.db");
 
 const proj = join(work, "sample");
 mkdirSync(proj);
-execFileSync("git", ["-C", proj, "init", "-q"]);
-execFileSync("git", ["-C", proj, "config", "user.email", "t@t"]);
-execFileSync("git", ["-C", proj, "config", "user.name", "t"]);
-// an unrelated in-progress change that must NOT get swept into the snapshot commit
-writeFileSync(join(proj, "wip.txt"), "not skuld's business\n");
 
 const JUNIT = `<testsuites><testsuite name="s" tests="2">
 <testcase classname="tests.test_auth" name="test_login" time="0.01"/>
@@ -63,22 +57,22 @@ assert.equal(run.total, 2, "total tests");
 assert.equal(run.passed, 1, "passed");
 assert.equal(run.failed, 1, "failed");
 assert.equal(run.line_rate, 0.5, "line rate");
-assert.equal(run.git_status, "committed", "git status");
 
 const tests = db.prepare("SELECT COUNT(*) c FROM discovered_tests WHERE run_id = ?").get(run.id) as any;
 assert.equal(tests.c, 2, "discovered rows");
 
-const log = execFileSync("git", ["-C", proj, "log", "--oneline"], { encoding: "utf8" });
-assert.match(log, /skuld:/, "commit message");
-
-const committed = execFileSync("git", ["-C", proj, "show", "--stat", "--oneline", "HEAD"], {
-  encoding: "utf8",
-});
-assert.match(committed, /\.skuld\/history\//, "history files committed");
-assert.doesNotMatch(committed, /wip\.txt/, "unrelated wip file must not be swept into the commit");
-
-const status = execFileSync("git", ["-C", proj, "status", "--porcelain"], { encoding: "utf8" });
-assert.match(status, /wip\.txt/, "unrelated wip file should remain uncommitted");
+// CLI: categorize planned tests and perf entries against the same db.
+const cli = (...args: string[]) =>
+  execFileSync("bun", [join(import.meta.dir, "skuld.ts"), ...args], { encoding: "utf8", env: process.env });
+cli("tests", "add", "sample", "Auth", "rejects bad token", "logs out");
+assert.match(cli("tests", "sample", "--area", "Auth"), /Auth\tunit\ttodo\t\trejects bad token/, "tests added");
+const testId = cli("tests", "sample", "--todo").split("\n").find((l) => l.endsWith("logs out"))!.split("\t")[0]!;
+cli("tests", "move", "Billing", testId);
+cli("tests", "done", testId);
+assert.match(cli("tests", "sample", "--area", "Billing"), /Billing\tunit\tdone\t\tlogs out/, "test moved + done");
+cli("perf", "add", "sample", "endpoint", "--area", "Usage", "/api/x");
+assert.match(cli("perf", "sample", "endpoint"), /endpoint\tUsage\tGET\t\/api\/x/, "perf entry added");
+assert.match(cli("discovered", "sample", "--unlinked"), /tests\.test_auth/, "discovered keys listed");
 
 rmSync(work, { recursive: true, force: true });
-console.log("selftest OK — run recorded, snapshot committed to project's own repo");
+console.log("selftest OK — run recorded, CLI categorizes tests and perf entries");

@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { readFile, mkdir, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { join, isAbsolute } from "node:path";
 import { db, getProject, listSuites, autoImportDiscoveredTests, type Project, type Suite } from "./db";
 import { parseJUnit, parseCobertura, type JUnitResult, type CoberturaResult } from "./parse";
@@ -24,16 +24,6 @@ export async function sh(cmd: string, cwd: string, env?: NodeJS.ProcessEnv): Pro
   }
 }
 
-async function git(repo: string, args: string[]): Promise<Sh> {
-  try {
-    const { stdout, stderr } = await pexec("git", ["-C", repo, ...args], { maxBuffer: 8 * 1024 * 1024 });
-    return { code: 0, out: stdout + stderr };
-  } catch (e) {
-    const err = e as { code?: number; stdout?: string; stderr?: string; message?: string };
-    return { code: err.code ?? 1, out: (err.stdout ?? "") + (err.stderr ?? "") + (err.message ?? "") };
-  }
-}
-
 function resolveIn(root: string, p: string): string {
   return isAbsolute(p) ? p : join(root, p);
 }
@@ -46,9 +36,7 @@ type SuiteOk = {
   shellCode: number;
   shellOut: string;
   junit: JUnitResult;
-  junitXml: string;
   coverage: CoberturaResult;
-  coverageXml: string;
 };
 type SuiteFail = { ok: false; suite: Suite; shellCode: number; shellOut: string; error: string };
 type SuiteRunResult = SuiteOk | SuiteFail;
@@ -70,17 +58,15 @@ async function runSuite(project: Project, suite: Suite): Promise<SuiteRunResult>
   }
   const junit = parseJUnit(junitXml);
 
-  let coverageXml = "";
   let coverage: CoberturaResult = { lineRate: 0, branchRate: 0, files: [] };
   if (suite.coverage_xml_path) {
     try {
-      coverageXml = await readFile(resolveIn(project.root_dir, suite.coverage_xml_path), "utf8");
-      coverage = parseCobertura(coverageXml);
+      coverage = parseCobertura(await readFile(resolveIn(project.root_dir, suite.coverage_xml_path), "utf8"));
     } catch {
       /* coverage optional */
     }
   }
-  return { ok: true, suite, shellCode: shell.code, shellOut: shell.out, junit, junitXml, coverage, coverageXml };
+  return { ok: true, suite, shellCode: shell.code, shellOut: shell.out, junit, coverage };
 }
 
 export async function runProject(projectId: number): Promise<RunResult> {
@@ -115,9 +101,6 @@ export async function runProject(projectId: number): Promise<RunResult> {
 
   const runId = insertRun(project, { started_at, finished_at, exit_code, results, log: log.slice(-20000) });
   autoImportDiscoveredTests(projectId, runId);
-
-  const gitStatus = await snapshotToGit(project, runId, { started_at, results });
-  db.prepare("UPDATE runs SET git_status = ? WHERE id = ?").run(gitStatus, runId);
 
   return { ok: true, runId };
 }
@@ -172,78 +155,4 @@ function insertRun(
   }
 
   return runId;
-}
-
-async function snapshotToGit(
-  project: Project,
-  runId: number,
-  d: { started_at: string; results: SuiteRunResult[] },
-): Promise<string> {
-  const root = project.root_dir;
-  const isRepo = await git(root, ["rev-parse", "--is-inside-work-tree"]);
-  if (isRepo.code !== 0) return "not-a-repo";
-
-  const stamp = d.started_at.replace(/[:.]/g, "-");
-  const dir = join(root, ".skuld", "history");
-  const ok = d.results.filter((r): r is SuiteOk => r.ok);
-
-  try {
-    await mkdir(dir, { recursive: true });
-    await writeFile(
-      join(dir, `${stamp}.json`),
-      JSON.stringify(
-        {
-          run_id: runId,
-          project: project.name,
-          at: d.started_at,
-          suites: ok.map((r) => ({
-            id: r.suite.id,
-            name: r.suite.name,
-            language: r.suite.language,
-            framework: r.suite.framework,
-            layer: r.suite.layer,
-            total: r.junit.total,
-            passed: r.junit.passed,
-            failed: r.junit.failed,
-            skipped: r.junit.skipped,
-            line_rate: r.coverage.lineRate,
-            branch_rate: r.coverage.branchRate,
-            files: r.coverage.files,
-          })),
-        },
-        null,
-        2,
-      ),
-    );
-    for (const r of ok) {
-      const suffix = `suite-${r.suite.id}-${r.suite.name || r.suite.framework}`.replace(/[^a-zA-Z0-9._-]/g, "_");
-      await writeFile(join(dir, `${stamp}.${suffix}.junit.xml`), r.junitXml);
-      if (r.coverageXml) await writeFile(join(dir, `${stamp}.${suffix}.coverage.xml`), r.coverageXml);
-    }
-  } catch {
-    return "failed";
-  }
-
-  // scoped to .skuld only — never -A, so unrelated uncommitted work in the
-  // project's own repo is never swept into a Skuld snapshot commit.
-  const add = await git(root, ["add", "--", ".skuld"]);
-  if (add.code !== 0) return "failed";
-  const total = ok.reduce((n, r) => n + r.junit.total, 0);
-  const passed = ok.reduce((n, r) => n + r.junit.passed, 0);
-  const files = ok.flatMap((r) => r.coverage.files);
-  const validSum = files.reduce((n, f) => n + f.lines_valid, 0);
-  const coveredSum = files.reduce((n, f) => n + f.lines_covered, 0);
-  const line_rate = validSum > 0 ? coveredSum / validSum : 0;
-  const commit = await git(root, [
-    "commit",
-    "-m",
-    `skuld: ${d.started_at} (${passed}/${total} pass, ${(line_rate * 100).toFixed(1)}% lines)`,
-  ]);
-  if (commit.code !== 0 && !/nothing to commit/i.test(commit.out)) return "failed";
-
-  if (project.git_push) {
-    const push = await git(root, ["push"]);
-    return push.code === 0 ? "pushed" : "failed";
-  }
-  return "committed";
 }

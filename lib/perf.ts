@@ -13,11 +13,14 @@ import { sh, type RunResult } from "./run";
 import { DEFAULT_SITESPEED_COMMAND } from "./presets";
 
 const REQUEST_TIMEOUT_MS = 30_000;
+// Timed calls per endpoint, after one untimed warm-up call.
+const SAMPLES = 10;
 
 type Result = {
   entry: PerfEntry;
   status: number;
   ms: number;
+  p95: number;
   ttfb: number;
   bytes: number;
   requests: number;
@@ -74,31 +77,39 @@ async function measureEndpoints(project: Project, entries: PerfEntry[]): Promise
   const auth = await login(project);
   if ("error" in auth) return auth;
 
+  const headers: Record<string, string> = auth.token ? { Authorization: `Bearer ${auth.token}` } : {};
   const results: Result[] = [];
-  // One at a time, so requests don't slow each other down.
+  // One request at a time, so they don't slow each other down.
   for (const entry of entries) {
+    const r: Result = { entry, status: 0, ms: 0, p95: 0, ttfb: 0, bytes: 0, requests: 1, fcp: 0, lcp: 0, error: "", reportPath: "" };
+    results.push(r);
+    // Reads only: a run must never change the backend's data.
+    if (entry.method !== "GET") {
+      r.error = "only GET endpoints are measured";
+      continue;
+    }
     const url = joinUrl(project.api_base_url, entry.path.replaceAll("{userId}", encodeURIComponent(auth.userId)));
-    const r: Result = { entry, status: 0, ms: 0, ttfb: 0, bytes: 0, requests: 1, fcp: 0, lcp: 0, error: "", reportPath: "" };
-    const t0 = performance.now();
+    const times: number[] = [];
+    const ttfbs: number[] = [];
     try {
-      const res = await fetch(url, {
-        method: entry.method,
-        headers: {
-          ...(entry.body ? { "Content-Type": "application/json" } : {}),
-          ...(auth.token ? { Authorization: `Bearer ${auth.token}` } : {}),
-        },
-        body: entry.body || undefined,
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-      });
-      r.ttfb = performance.now() - t0;
-      r.bytes = (await res.arrayBuffer()).byteLength;
-      r.ms = performance.now() - t0;
-      r.status = res.status;
+      for (let i = 0; i <= SAMPLES; i++) {
+        const t0 = performance.now();
+        const res = await fetch(url, { headers, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+        const ttfb = performance.now() - t0;
+        r.bytes = (await res.arrayBuffer()).byteLength;
+        r.status = res.status;
+        if (i > 0) {
+          times.push(performance.now() - t0);
+          ttfbs.push(ttfb);
+        }
+        if (!res.ok) break; // an error answer isn't worth timing ten times
+      }
     } catch (e) {
-      r.ms = performance.now() - t0;
       r.error = (e as Error).message;
     }
-    results.push(r);
+    r.ms = median(times);
+    r.p95 = percentile(times, 95);
+    r.ttfb = median(ttfbs);
   }
   return { results, reportDir: "", log: "" };
 }
@@ -139,8 +150,8 @@ async function measurePages(project: Project, entries: PerfEntry[], started_at: 
     const url = joinUrl(project.site_url, entry.path);
     const p = pages.get(url) ?? pages.get(url.replace(/\/$/, "")) ?? pages.get(`${url}/`);
     return p
-      ? { entry, status: p.status, ms: p.ms, ttfb: p.ttfb, bytes: p.bytes, requests: p.requests, fcp: p.fcp, lcp: p.lcp, error: "", reportPath: p.reportPath }
-      : { entry, status: 0, ms: 0, ttfb: 0, bytes: 0, requests: 0, fcp: 0, lcp: 0, error: "missing from the sitespeed.io report", reportPath: "" };
+      ? { entry, status: p.status, ms: p.ms, p95: 0, ttfb: p.ttfb, bytes: p.bytes, requests: p.requests, fcp: p.fcp, lcp: p.lcp, error: "", reportPath: p.reportPath }
+      : { entry, status: 0, ms: 0, p95: 0, ttfb: 0, bytes: 0, requests: 0, fcp: 0, lcp: 0, error: "missing from the sitespeed.io report", reportPath: "" };
   });
   return { results, reportDir, log: shell.out.slice(-20000) };
 }
@@ -155,6 +166,12 @@ export type PageMetrics = {
   fcp: number;
   lcp: number;
 };
+
+/** Nearest-rank percentile; with 10 samples p95 is the slowest one. */
+export function percentile(xs: number[], p: number): number {
+  const s = [...xs].sort((a, b) => a - b);
+  return s.length === 0 ? 0 : s[Math.ceil((p / 100) * s.length) - 1]!;
+}
 
 function median(xs: number[]): number {
   const s = [...xs].sort((a, b) => a - b);
@@ -242,12 +259,12 @@ function insertPerfRun(
       );
     const runId = Number(info.lastInsertRowid);
     const ins = db.prepare(
-      `INSERT INTO perf_results (run_id, entry_id, label, area, status, ms, ttfb, bytes, requests, fcp, lcp, error, report_path)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO perf_results (run_id, entry_id, label, area, status, ms, p95, ttfb, bytes, requests, fcp, lcp, error, report_path)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     for (const r of results) {
       const label = kind === "endpoint" ? `${r.entry.method} ${r.entry.path}` : r.entry.path;
-      ins.run(runId, r.entry.id, label, r.entry.area, r.status, r.ms, r.ttfb, r.bytes, r.requests, r.fcp, r.lcp, r.error, r.reportPath);
+      ins.run(runId, r.entry.id, label, r.entry.area, r.status, r.ms, r.p95, r.ttfb, r.bytes, r.requests, r.fcp, r.lcp, r.error, r.reportPath);
     }
     db.exec("COMMIT");
     return runId;

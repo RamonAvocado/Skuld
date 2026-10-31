@@ -4,7 +4,6 @@ import { listPerfEntries, listPerfRuns, perfResultsForRun, perfSeries, type Perf
 import { createPerfEntry, deletePerfEntry, runPerfAction } from "@/lib/actions";
 import { RunButton } from "@/components/run-button";
 import { PerfChart } from "@/components/perf-chart";
-import { FormSelect } from "@/components/form-select";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { Chevron, detailsCls, summaryCls } from "@/components/disclosure";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@mimird/ui/components/card";
@@ -13,9 +12,7 @@ import { Input } from "@mimird/ui/components/input";
 import { Badge } from "@mimird/ui/components/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@mimird/ui/components/table";
 
-const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"].map((m) => ({ value: m, label: m }));
-
-function ms(n: number) {
+export function ms(n: number) {
   return n >= 1000 ? `${(n / 1000).toFixed(2)} s` : `${Math.round(n)} ms`;
 }
 
@@ -25,7 +22,7 @@ function size(n: number) {
   return `${n} B`;
 }
 
-function delta(now: number, before: number | undefined) {
+export function delta(now: number, before: number | undefined) {
   if (!before || !now) return "—";
   const d = ((now - before) / before) * 100;
   return `${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(0)}%`;
@@ -115,7 +112,7 @@ export function PerfPanel({ projectId, kind }: { projectId: number; kind: PerfKi
                       <span className={cn("font-medium", failing(latest) ? "text-destructive" : "text-foreground")}>
                         {ms(latest.ms)}
                       </span>{" "}
-                      · {size(latest.bytes)} · {delta(latest.ms, before.get(e.id))}
+                      {!isPage && <> · p95 {ms(latest.p95)}</>} · {size(latest.bytes)} · {delta(latest.ms, before.get(e.id))}
                     </span>
                   )}
                 </summary>
@@ -148,7 +145,6 @@ export function PerfPanel({ projectId, kind }: { projectId: number; kind: PerfKi
           <form action={createPerfEntry} className="flex flex-wrap items-end gap-2">
             <input type="hidden" name="project_id" value={projectId} />
             <input type="hidden" name="kind" value={kind} />
-            {!isPage && <FormSelect name="method" aria-label="Method" defaultValue="GET" options={METHODS} />}
             <Input
               name="path"
               aria-label="Path"
@@ -157,9 +153,6 @@ export function PerfPanel({ projectId, kind }: { projectId: number; kind: PerfKi
               required
             />
             <Input name="area" aria-label="Area" placeholder="Area (optional)" className="w-40" />
-            {!isPage && (
-              <Input name="body" aria-label="JSON body" placeholder="JSON body (optional)" className="w-48 font-mono text-sm" />
-            )}
             <Button type="submit" variant="outline">
               Add {Noun}
             </Button>
@@ -226,7 +219,8 @@ function ResultsTable({
           <TableHead className="text-right">TTFB</TableHead>
           {isPage && <TableHead className="text-right">FCP</TableHead>}
           {isPage && <TableHead className="text-right">LCP</TableHead>}
-          <TableHead className="text-right">{isPage ? "Load" : "Time"}</TableHead>
+          <TableHead className="text-right">{isPage ? "Load" : "Median"}</TableHead>
+          {!isPage && <TableHead className="text-right">p95</TableHead>}
           {before && <TableHead className="text-right">vs last</TableHead>}
         </TableRow>
       </TableHeader>
@@ -255,6 +249,7 @@ function ResultsTable({
             {isPage && <TableCell className={num}>{ms(r.fcp)}</TableCell>}
             {isPage && <TableCell className={num}>{ms(r.lcp)}</TableCell>}
             <TableCell className={cn(num, "font-medium")}>{ms(r.ms)}</TableCell>
+            {!isPage && <TableCell className={num}>{ms(r.p95)}</TableCell>}
             {before && <TableCell className={cn(num, "text-muted-foreground")}>{delta(r.ms, before.get(r.entry_id))}</TableCell>}
           </TableRow>
         ))}

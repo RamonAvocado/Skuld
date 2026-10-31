@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { db } from "./db";
+import { db, getProject } from "./db";
 import { runProject } from "./run";
 import { runPerf } from "./perf";
 import type { PerfKind } from "./db";
@@ -10,6 +10,13 @@ import type { PerfKind } from "./db";
 function str(fd: FormData, k: string): string {
   return String(fd.get(k) ?? "").trim();
 }
+// Every project page; the URL segment is the project's uuid.
+const PROJECT_PAGE = "/projects/[id]";
+
+function projectUrl(id: number): string {
+  return `/projects/${getProject(id)?.uuid ?? ""}`;
+}
+
 function int(fd: FormData, k: string): number {
   return Number(fd.get(k) ?? 0);
 }
@@ -24,13 +31,14 @@ export async function createProject(fd: FormData) {
   const language = str(fd, "language") || "other";
   const framework = str(fd, "framework") || "other";
   const layer = str(fd, "layer") || "unit";
+  const uuid = crypto.randomUUID();
 
   const info = db
     .prepare(
-      `INSERT INTO projects (name, root_dir, test_command, junit_path, coverage_xml_path, legacy_migrated)
-       VALUES (?, ?, ?, ?, ?, 1)`,
+      `INSERT INTO projects (uuid, name, root_dir, test_command, junit_path, coverage_xml_path, legacy_migrated)
+       VALUES (?, ?, ?, ?, ?, ?, 1)`,
     )
-    .run(name, root_dir, test_command, junit_path, coverage_xml_path || ".skuld/coverage.xml");
+    .run(uuid, name, root_dir, test_command, junit_path, coverage_xml_path || ".skuld/coverage.xml");
   const projectId = Number(info.lastInsertRowid);
 
   db.prepare(
@@ -39,17 +47,16 @@ export async function createProject(fd: FormData) {
   ).run(projectId, language, framework, layer, test_command, junit_path, coverage_xml_path);
 
   revalidatePath("/", "layout");
-  redirect(`/projects/${projectId}`);
+  redirect(`/projects/${uuid}`);
 }
 
 export async function updateProject(fd: FormData) {
   const id = int(fd, "id");
   db.prepare(
-    `UPDATE projects SET name = ?, root_dir = ?, git_push = ?, enable_tests = ?, enable_perf = ? WHERE id = ?`,
+    `UPDATE projects SET name = ?, root_dir = ?, enable_tests = ?, enable_perf = ? WHERE id = ?`,
   ).run(
     str(fd, "name"),
     str(fd, "root_dir"),
-    fd.get("git_push") ? 1 : 0,
     fd.get("enable_tests") ? 1 : 0,
     fd.get("enable_perf") ? 1 : 0,
     id,
@@ -77,7 +84,7 @@ export async function createSuite(fd: FormData) {
     str(fd, "coverage_xml_path"),
     int(fd, "sort"),
   );
-  revalidatePath(`/projects/${project_id}`, "layout");
+  revalidatePath(PROJECT_PAGE, "page");
 }
 
 export async function updateSuite(fd: FormData) {
@@ -96,13 +103,13 @@ export async function updateSuite(fd: FormData) {
     str(fd, "coverage_xml_path"),
     int(fd, "id"),
   );
-  revalidatePath(`/projects/${project_id}`, "layout");
+  revalidatePath(PROJECT_PAGE, "page");
 }
 
 export async function deleteSuite(fd: FormData) {
   const project_id = int(fd, "project_id");
   db.prepare("DELETE FROM suites WHERE id = ?").run(int(fd, "id"));
-  revalidatePath(`/projects/${project_id}`, "layout");
+  revalidatePath(PROJECT_PAGE, "page");
 }
 
 export async function deleteProject(fd: FormData) {
@@ -114,11 +121,11 @@ export async function deleteProject(fd: FormData) {
 export async function runProjectAction(fd: FormData): Promise<void> {
   const id = int(fd, "id");
   const res = await runProject(id);
-  revalidatePath(`/projects/${id}`);
+  revalidatePath(PROJECT_PAGE, "page");
   revalidatePath("/");
   if (!res.ok) {
     // surface via query param the page can toast
-    redirect(`/projects/${id}?err=${encodeURIComponent(res.error.slice(0, 300))}`);
+    redirect(`${projectUrl(id)}?tab=test&err=${encodeURIComponent(res.error.slice(0, 300))}`);
   }
 }
 
@@ -132,13 +139,13 @@ export async function createArea(fd: FormData) {
       int(fd, "sort"),
     );
   }
-  revalidatePath(`/projects/${project_id}`);
+  revalidatePath(PROJECT_PAGE, "page");
 }
 
 export async function deleteArea(fd: FormData) {
   const project_id = int(fd, "project_id");
   db.prepare("DELETE FROM areas WHERE id = ?").run(int(fd, "id"));
-  revalidatePath(`/projects/${project_id}`);
+  revalidatePath(PROJECT_PAGE, "page");
 }
 
 export async function createPlannedTest(fd: FormData) {
@@ -150,7 +157,7 @@ export async function createPlannedTest(fd: FormData) {
       "INSERT INTO planned_tests (area_id, title, layer, status, notes) VALUES (?, ?, ?, 'todo', ?)",
     ).run(area_id, title, str(fd, "layer") || "unit", str(fd, "notes"));
   }
-  revalidatePath(`/projects/${project_id}`);
+  revalidatePath(PROJECT_PAGE, "page");
 }
 
 export async function updatePlannedTest(fd: FormData) {
@@ -162,7 +169,7 @@ export async function updatePlannedTest(fd: FormData) {
     int(fd, "area_id"),
     int(fd, "id"),
   );
-  revalidatePath(`/projects/${project_id}`);
+  revalidatePath(PROJECT_PAGE, "page");
 }
 
 export async function togglePlannedStatus(fd: FormData) {
@@ -170,7 +177,7 @@ export async function togglePlannedStatus(fd: FormData) {
   db.prepare(
     "UPDATE planned_tests SET status = CASE status WHEN 'done' THEN 'todo' ELSE 'done' END WHERE id = ?",
   ).run(int(fd, "id"));
-  revalidatePath(`/projects/${project_id}`);
+  revalidatePath(PROJECT_PAGE, "page");
 }
 
 export async function linkPlannedToDiscovered(fd: FormData) {
@@ -191,19 +198,19 @@ export async function linkPlannedToDiscovered(fd: FormData) {
          AND area_id IN (SELECT id FROM areas WHERE project_id = ? AND is_auto = 1)`,
     ).run(key, id, project_id);
   }
-  revalidatePath(`/projects/${project_id}`);
+  revalidatePath(PROJECT_PAGE, "page");
 }
 
 export async function deletePlannedTest(fd: FormData) {
   const project_id = int(fd, "project_id");
   db.prepare("DELETE FROM planned_tests WHERE id = ?").run(int(fd, "id"));
-  revalidatePath(`/projects/${project_id}`);
+  revalidatePath(PROJECT_PAGE, "page");
 }
 
 // Plain args, not FormData: called from a drop handler, not a <form>.
 export async function movePlannedTest(id: number, areaId: number, projectId: number) {
   db.prepare("UPDATE planned_tests SET area_id = ? WHERE id = ?").run(areaId, id);
-  revalidatePath(`/projects/${projectId}`);
+  revalidatePath(PROJECT_PAGE, "page");
 }
 
 // --- performance ----------------------------------------------------------------
@@ -228,7 +235,7 @@ export async function updatePerfSettings(fd: FormData) {
   // An empty password field keeps the stored one, so it never has to be sent back to the page.
   const password = String(fd.get("login_password") ?? "");
   if (password) db.prepare("UPDATE projects SET login_password = ? WHERE id = ?").run(password, id);
-  revalidatePath(`/projects/${id}`);
+  revalidatePath(PROJECT_PAGE, "page");
 }
 
 export async function createPerfEntry(fd: FormData) {
@@ -243,18 +250,18 @@ export async function createPerfEntry(fd: FormData) {
     str(fd, "body"),
     str(fd, "area"),
   );
-  revalidatePath(`/projects/${project_id}`);
+  revalidatePath(PROJECT_PAGE, "page");
 }
 
 export async function deletePerfEntry(fd: FormData) {
   const project_id = int(fd, "project_id");
   db.prepare("DELETE FROM perf_entries WHERE id = ?").run(int(fd, "id"));
-  revalidatePath(`/projects/${project_id}`);
+  revalidatePath(PROJECT_PAGE, "page");
 }
 
 export async function runPerfAction(fd: FormData): Promise<void> {
   const id = int(fd, "id");
   const res = await runPerf(id, perfKind(fd));
-  revalidatePath(`/projects/${id}`);
-  if (!res.ok) redirect(`/projects/${id}?err=${encodeURIComponent(res.error.slice(0, 300))}`);
+  revalidatePath(PROJECT_PAGE, "page");
+  if (!res.ok) redirect(`${projectUrl(id)}?tab=performance&err=${encodeURIComponent(res.error.slice(0, 300))}`);
 }

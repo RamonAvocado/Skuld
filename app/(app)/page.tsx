@@ -38,7 +38,7 @@ export default function Home() {
                 <CardHeader>
                   <CardTitle className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
                     <Link
-                      href={`/projects/${p.id}`}
+                      href={`/projects/${p.uuid}`}
                       className="rounded-sm underline-offset-2 hover:underline focus-visible:underline focus-visible:outline-none"
                     >
                       {p.name}

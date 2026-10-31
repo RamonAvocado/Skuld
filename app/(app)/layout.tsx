@@ -8,7 +8,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const collapsed = (await cookies()).get(SIDEBAR_COOKIE)?.value === "collapsed";
   // node:sqlite rows have a null prototype — plain-object them before
   // crossing the server→client boundary into the shell.
-  const projects = listProjects().map((p) => ({ id: p.id, name: p.name }));
+  const projects = listProjects().map((p) => ({ uuid: p.uuid, name: p.name }));
 
   return (
     <AppShell user={user} projects={projects} defaultCollapsed={collapsed}>

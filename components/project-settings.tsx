@@ -37,7 +37,6 @@ export type SettingsProject = {
   id: number;
   name: string;
   root_dir: string;
-  git_push: number;
   enable_tests: number;
   enable_perf: number;
   api_base_url: string;
@@ -113,14 +112,6 @@ export function ProjectSettings({
                   Performance
                 </label>
               </fieldset>
-              <label className="flex w-fit cursor-pointer items-center gap-2 text-sm">
-                <Switch name="git_push" defaultChecked={project.git_push === 1} />
-                Git push after commit
-              </label>
-              <p className="-mt-2 text-xs text-muted-foreground">
-                Every run commits a snapshot to <code>.skuld/history/</code> in this project&apos;s own
-                repo. Enable this to also push after each commit.
-              </p>
               <Button type="submit" size="sm" className="w-fit">
                 Save
               </Button>
@@ -273,7 +264,9 @@ function Field({
   return (
     <div className="grid gap-1.5">
       <Label htmlFor={`project-${name}`}>{label}</Label>
+      {/* key: a save re-renders with the stored value; remount instead of changing an uncontrolled default */}
       <Input
+        key={defaultValue}
         id={`project-${name}`}
         name={name}
         defaultValue={defaultValue}
