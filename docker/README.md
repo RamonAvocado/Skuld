@@ -31,21 +31,24 @@ docker run -d --name skuld \
   ramonavocado/skuld:latest
 ```
 
-Open <http://localhost:3003> and sign up. The verification code is in `docker logs skuld`. Then add a project with the path
-`/home/me/repos/my-api`.
+Open <http://localhost:3003> and sign up. The verification code is in `docker logs skuld`. Then add a project with the path `/home/me/repos/my-api`.
 
 ## Docker Compose
+
+Save this as `compose.yaml`:
 
 ```yaml
 services:
   skuld:
     image: ramonavocado/skuld:latest
+    container_name: skuld
     ports:
       - "3003:3003"
     environment:
-      SESSION_SECRET: ${SESSION_SECRET}   # 32+ random characters
-      APP_URL: https://skuld.example.com
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET in .env}
+      APP_URL: ${APP_URL:-http://localhost:3003}
     volumes:
+      # Named volume holding the SQLite database; survives upgrades and `docker compose down`
       - skuld-data:/data
       # Mount every project at the same path you register it under in Skuld
       - /home/me/repos/my-api:/home/me/repos/my-api
@@ -55,6 +58,34 @@ services:
 
 volumes:
   skuld-data:
+    name: skuld-data   # fixed name, so the backup commands below find it
+```
+
+Create a `.env` file next to it, then start the stack:
+
+```bash
+echo "SESSION_SECRET=$(openssl rand -hex 32)" > .env
+docker compose up -d
+```
+
+To keep the database in a folder you choose, replace `skuld-data:/data` with a bind mount
+such as `./data:/data`.
+
+**Back up** the database. Stop Skuld first so the SQLite files are consistent
+(`docker compose down -v` deletes the volume, so take a backup first):
+
+```bash
+docker compose stop
+docker run --rm -v skuld-data:/data -v "$PWD":/backup alpine \
+  tar czf /backup/skuld-backup.tgz -C /data .
+docker compose start
+```
+
+**Restore** it into an empty volume:
+
+```bash
+docker run --rm -v skuld-data:/data -v "$PWD":/backup alpine \
+  tar xzf /backup/skuld-backup.tgz -C /data
 ```
 
 ## Environment variables
@@ -106,15 +137,6 @@ The `skuld` CLI is included:
 docker exec -it skuld bun run skuld help
 docker exec -it skuld bun run skuld run my-api
 ```
-
-## Tags
-
-| Tag | Meaning |
-| --- | --- |
-| `latest` | Most recent release |
-| `x.y.z` | A specific release. Pin this in production. |
-
-The image version is also stored in the `org.opencontainers.image.version` label.
 
 ## Upgrading
 

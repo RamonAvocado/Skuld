@@ -3,12 +3,17 @@ name: Publish Docker image
 on:
   release:
     types: [published]
+  # README-only edits update the Docker Hub page without a release
+  push:
+    branches: [main]
+    paths: [docker/README.md]
 
 permissions:
   contents: read
 
 jobs:
   docker:
+    if: github.event_name == 'release'
     runs-on: ubuntu-latest
     env:
       IMAGE: ${{ vars.DOCKERHUB_USERNAME }}/skuld
@@ -41,3 +46,19 @@ jobs:
           tags: |
             ${{ env.IMAGE }}:${{ steps.version.outputs.version }}
             ${{ env.IMAGE }}:latest
+
+  readme:
+    needs: docker
+    # Still runs on README-only pushes, where the docker job is skipped
+    if: ${{ !failure() && !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: peter-evans/dockerhub-description@v4
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          # The token needs the "Read, Write, Delete" scope to edit the description
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: ${{ vars.DOCKERHUB_USERNAME }}/skuld
+          readme-filepath: docker/README.md
+          short-description: Self-hosted dashboard for test plans, coverage and performance

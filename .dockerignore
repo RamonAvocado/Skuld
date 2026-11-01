@@ -4,3 +4,11 @@ node_modules
 .env*
 skuld.db*
 .next-docker
+# Local data that must never reach the image: sitespeed.io reports (screenshots and URLs
+# of your apps, possibly logged in), keys, local tooling
+perf-reports
+.skuld
+coverage
+*.pem
+*.tsbuildinfo
+.claude
