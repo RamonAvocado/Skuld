@@ -2,19 +2,18 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { TableRow } from "@mimird/ui/components/table";
 import { movePlannedTest } from "@/lib/actions";
 
 // Native HTML5 drag & drop. Keyboard fallback: the Edit dialog's Group select.
-export function DraggableRow({ id, children }: { id: number; children: React.ReactNode }) {
+export function DraggableRow({ id, className, children }: { id: number; className?: string; children: React.ReactNode }) {
   return (
-    <TableRow
+    <li
       draggable
       onDragStart={(e) => e.dataTransfer.setData("text/plain", String(id))}
-      className="cursor-grab active:cursor-grabbing"
+      className={cn("cursor-grab active:cursor-grabbing", className)}
     >
       {children}
-    </TableRow>
+    </li>
   );
 }
 

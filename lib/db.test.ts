@@ -111,6 +111,28 @@ test("autoImportDiscoveredTests never creates a second row for a key already tra
   expect(autoArea === undefined || plannedForArea(autoArea.id).length === 0).toBe(true);
 });
 
+test("areaSeries counts linked tests and passes, per group per run", async () => {
+  const { areaSeries } = await import("./db");
+  const projectId = insertLegacyProject();
+  const suiteId = listSuites(projectId)[0].id;
+  const area = Number(db.prepare("INSERT INTO areas (project_id, name) VALUES (?, 'Auth')").run(projectId).lastInsertRowid);
+  const plan = db.prepare("INSERT INTO planned_tests (area_id, title, discovered_test_key) VALUES (?, ?, ?)");
+  plan.run(area, "a", "t::a");
+  plan.run(area, "b", "t::b");
+  plan.run(area, "unlinked", null);
+
+  const run1 = insertRunWithSuite(projectId, suiteId, ["t::a", "t::b", "t::other"]);
+  const run2 = insertRunWithSuite(projectId, suiteId, ["t::a", "t::b"]);
+  const run3 = insertRunWithSuite(projectId, suiteId, ["t::other"]);
+  db.prepare("UPDATE discovered_tests SET outcome = 'failed' WHERE run_id = ? AND key = 't::b'").run(run2);
+
+  expect(areaSeries(projectId).map(({ run_id, area_id, total, passed }) => ({ run_id, area_id, total, passed }))).toEqual([
+    { run_id: run1, area_id: area, total: 2, passed: 2 },
+    { run_id: run2, area_id: area, total: 2, passed: 1 },
+    { run_id: run3, area_id: null, total: 0, passed: 0 },
+  ]);
+});
+
 test("kv round-trips JSON and deletes", async () => {
   const { kvGet, kvSet, kvDel } = await import("./db");
   expect(await kvGet("missing")).toBeNull();

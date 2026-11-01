@@ -42,6 +42,7 @@ entries straight in the db (same `SKULD_DB`). Refresh the page to see changes.
 
 ```bash
 bun run skuld projects
+bun run skuld run my-api
 bun run skuld tests add my-api Auth --layer e2e "rejects expired token" "logs out"
 bun run skuld tests move Billing 12 13
 bun run skuld perf add my-api endpoint --area Usage /api/v1/usage /api/v1/limits

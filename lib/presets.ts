@@ -83,3 +83,10 @@ export const LAYERS = ["unit", "integration", "e2e", "other"] as const;
 // Chromium, so its chromedriver always matches; video is off because it needs ffmpeg.
 export const DEFAULT_SITESPEED_COMMAND =
   "sitespeed.io urls.txt -n 3 --outputFolder report --browsertime.headless true --browsertime.chrome.binaryPath /usr/bin/chromium --browsertime.chrome.chromedriverPath /usr/bin/chromedriver --browsertime.chrome.args no-sandbox --video false --visualMetrics false";
+
+// Group colors when the user hasn't picked one.
+export const AREA_PALETTE = ["#3b82f6", "#f59e0b", "#10b981", "#ef4444", "#8b5cf6", "#06b6d4", "#ec4899", "#84cc16"];
+
+export function areaColor(area: { color: string }, index: number): string {
+  return area.color || AREA_PALETTE[index % AREA_PALETTE.length]!;
+}

@@ -163,6 +163,12 @@ function open(): DatabaseSync {
   } catch {
     /* column already exists */
   }
+  // '' = palette color by position (areaColor in lib/presets.ts).
+  try {
+    db.exec("ALTER TABLE areas ADD COLUMN color TEXT NOT NULL DEFAULT ''");
+  } catch {
+    /* column already exists */
+  }
   // Which parts of Skuld a project uses, and how performance runs reach it.
   // ponytail: the login password is stored in plain text in the local db; use a throwaway test account.
   for (const col of [
@@ -345,7 +351,7 @@ export function coverageForRun(runId: number) {
     .all(runId) as { id: number; path: string; line_rate: number; lines_covered: number; lines_valid: number }[];
 }
 
-export type Area = { id: number; project_id: number; name: string; sort: number; is_auto: number };
+export type Area = { id: number; project_id: number; name: string; sort: number; is_auto: number; color: string };
 export type PlannedTest = {
   id: number;
   area_id: number;
@@ -366,6 +372,36 @@ export function plannedForArea(areaId: number): PlannedTest[] {
   return db
     .prepare("SELECT * FROM planned_tests WHERE area_id = ? ORDER BY id")
     .all(areaId) as PlannedTest[];
+}
+
+// Linked tests per group per run (all present, and passing), for the group evolution chart.
+// Every run appears; one with no linked tests gives a single row with area_id null.
+// ponytail: today's links applied to past runs; store per-run area ids if regrouping must not rewrite history.
+export function areaSeries(projectId: number) {
+  return (
+    db
+      .prepare(
+        `SELECT r.id AS run_id, r.finished_at, p.area_id, COUNT(d.id) AS total,
+                COALESCE(SUM(d.outcome = 'passed'), 0) AS passed, COALESCE(SUM(d.duration_ms), 0) AS duration_ms
+         FROM runs r
+         LEFT JOIN (
+           discovered_tests d
+           JOIN planned_tests p ON p.discovered_test_key = d.key
+           JOIN areas a ON a.id = p.area_id
+         ) ON d.run_id = r.id AND a.project_id = r.project_id
+         WHERE r.project_id = ?
+         GROUP BY r.id, p.area_id
+         ORDER BY r.id`,
+      )
+      .all(projectId) as Record<string, unknown>[]
+  ).map((r) => ({ ...r })) as {
+    run_id: number;
+    finished_at: string;
+    area_id: number | null;
+    total: number;
+    passed: number;
+    duration_ms: number;
+  }[];
 }
 
 export function roadmap(projectId: number) {
@@ -453,7 +489,7 @@ function findOrCreateAutoArea(projectId: number): Area {
   const info = db
     .prepare("INSERT INTO areas (project_id, name, sort, is_auto) VALUES (?, 'Auto-discovered', 9999, 1)")
     .run(projectId);
-  return { id: Number(info.lastInsertRowid), project_id: projectId, name: "Auto-discovered", sort: 9999, is_auto: 1 };
+  return { id: Number(info.lastInsertRowid), project_id: projectId, name: "Auto-discovered", sort: 9999, is_auto: 1, color: "" };
 }
 
 // Idempotent: never inserts a second row for a discovered_test_key already

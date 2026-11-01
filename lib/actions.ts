@@ -160,15 +160,33 @@ export async function createPlannedTest(fd: FormData) {
   revalidatePath(PROJECT_PAGE, "page");
 }
 
+export async function updateArea(fd: FormData) {
+  const name = str(fd, "name");
+  const color = str(fd, "color");
+  db.prepare("UPDATE areas SET name = COALESCE(NULLIF(?, ''), name), color = ? WHERE id = ?").run(
+    name,
+    /^#[0-9a-f]{6}$/i.test(color) ? color : "",
+    int(fd, "id"),
+  );
+  revalidatePath(PROJECT_PAGE, "page");
+}
+
 export async function updatePlannedTest(fd: FormData) {
   const project_id = int(fd, "project_id");
   const title = str(fd, "title");
+  const id = int(fd, "id");
   if (!title) return;
-  db.prepare("UPDATE planned_tests SET title = ?, area_id = ? WHERE id = ?").run(
+  db.prepare("UPDATE planned_tests SET title = ?, area_id = ?, layer = COALESCE(NULLIF(?, ''), layer) WHERE id = ?").run(
     title,
     int(fd, "area_id"),
-    int(fd, "id"),
+    str(fd, "layer"),
+    id,
   );
+  const key = str(fd, "discovered_test_key");
+  const current = db.prepare("SELECT discovered_test_key AS k FROM planned_tests WHERE id = ?").get(id) as
+    | { k: string | null }
+    | undefined;
+  if (fd.has("discovered_test_key") && key !== (current?.k ?? "")) link(id, project_id, key);
   revalidatePath(PROJECT_PAGE, "page");
 }
 
@@ -180,10 +198,7 @@ export async function togglePlannedStatus(fd: FormData) {
   revalidatePath(PROJECT_PAGE, "page");
 }
 
-export async function linkPlannedToDiscovered(fd: FormData) {
-  const project_id = int(fd, "project_id");
-  const key = str(fd, "discovered_test_key");
-  const id = int(fd, "id");
+function link(id: number, project_id: number, key: string) {
   db.prepare("UPDATE planned_tests SET discovered_test_key = ?, status = ? WHERE id = ?").run(
     key || null,
     key ? "done" : "todo",
@@ -198,7 +213,6 @@ export async function linkPlannedToDiscovered(fd: FormData) {
          AND area_id IN (SELECT id FROM areas WHERE project_id = ? AND is_auto = 1)`,
     ).run(key, id, project_id);
   }
-  revalidatePath(PROJECT_PAGE, "page");
 }
 
 export async function deletePlannedTest(fd: FormData) {

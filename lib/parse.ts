@@ -38,7 +38,8 @@ export function parseJUnit(xml: string): JUnitResult {
   const tests: DiscoveredTest[] = [];
   for (const suite of suites) {
     for (const tc of asArray(suite?.testcase)) {
-      const classname = String(tc["@_classname"] ?? "");
+      // bun test leaves classname empty and puts the test file in `file`.
+      const classname = String(tc["@_classname"] || tc["@_file"] || "");
       const name = String(tc["@_name"] ?? "");
       let outcome: DiscoveredTest["outcome"] = "passed";
       if ("failure" in tc) outcome = "failed";

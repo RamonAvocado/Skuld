@@ -6,10 +6,12 @@
  */
 import { parseArgs } from "node:util";
 import { db, latestRun, discoveredForRun, type Project } from "../lib/db";
+import { runProject } from "../lib/run";
 
 const USAGE = `skuld <command>   (<project> = uuid or name; ids come from the list commands)
 
   projects
+  run <project>                                   (runs its suites; new tests land in the auto area)
   areas <project>
   area add <project> <name>...
   area rename <area-id> <name>
@@ -81,6 +83,14 @@ switch (cmd) {
     );
     break;
 
+  case "run": {
+    const res = await runProject(project(sub).id);
+    if (!res.ok) die(res.error);
+    const r = latestRun(project(sub).id)!;
+    console.log(`run ${res.runId}: ${r.passed} passed, ${r.failed} failed, ${r.skipped} skipped`);
+    break;
+  }
+
   case "areas": {
     const p = project(sub);
     print(
@@ -126,7 +136,7 @@ switch (cmd) {
     } else if (sub === "link") {
       const [id] = ids([rest[0]!]);
       const key = rest[1] ?? die(USAGE);
-      // Same as linkPlannedToDiscovered in lib/actions.ts: drop the auto-imported duplicate.
+      // Same as link() in lib/actions.ts: drop the auto-imported duplicate.
       db.prepare("UPDATE planned_tests SET discovered_test_key = ?, status = 'done' WHERE id = ?").run(key, id!);
       db.prepare(
         `DELETE FROM planned_tests WHERE discovered_test_key = ? AND id != ?

@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { readFile } from "node:fs/promises";
-import { join, isAbsolute } from "node:path";
+import { readFile, mkdir } from "node:fs/promises";
+import { join, isAbsolute, dirname } from "node:path";
 import { db, getProject, listSuites, autoImportDiscoveredTests, type Project, type Suite } from "./db";
 import { parseJUnit, parseCobertura, type JUnitResult, type CoberturaResult } from "./parse";
 
@@ -42,8 +42,10 @@ type SuiteFail = { ok: false; suite: Suite; shellCode: number; shellOut: string;
 type SuiteRunResult = SuiteOk | SuiteFail;
 
 async function runSuite(project: Project, suite: Suite): Promise<SuiteRunResult> {
-  const shell = await sh(suite.test_command, project.root_dir);
   const junitPath = resolveIn(project.root_dir, suite.junit_path);
+  // Some reporters (bun test) don't create the report's folder themselves.
+  await mkdir(dirname(junitPath), { recursive: true });
+  const shell = await sh(suite.test_command, project.root_dir);
   let junitXml: string;
   try {
     junitXml = await readFile(junitPath, "utf8");
