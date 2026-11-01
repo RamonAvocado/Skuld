@@ -219,22 +219,38 @@ function perfKind(fd: FormData): PerfKind {
   return str(fd, "kind") === "page" ? "page" : "endpoint";
 }
 
-export async function updatePerfSettings(fd: FormData) {
+export async function updateEndpointSettings(fd: FormData) {
   const id = int(fd, "id");
-  db.prepare(
-    `UPDATE projects SET api_base_url = ?, login_path = ?, login_email = ?, site_url = ?, site_cookie = ?, sitespeed_command = ? WHERE id = ?`,
-  ).run(
+  let vars: unknown;
+  try {
+    vars = JSON.parse(str(fd, "perf_vars") || "{}");
+  } catch (e) {
+    redirect(`${projectUrl(id)}?tab=performance&err=${encodeURIComponent(`Variables aren't valid JSON: ${(e as Error).message}`)}`);
+  }
+  const ok =
+    vars && typeof vars === "object" && !Array.isArray(vars) &&
+    Object.values(vars).every((v) => typeof v === "string" || typeof v === "number");
+  if (!ok) redirect(`${projectUrl(id)}?tab=performance&err=${encodeURIComponent('Variables must be a JSON object of strings or numbers, like {"strategy_id": "42"}')}`);
+  db.prepare(`UPDATE projects SET api_base_url = ?, login_path = ?, login_email = ?, perf_vars = ? WHERE id = ?`).run(
     str(fd, "api_base_url"),
     str(fd, "login_path") || "/api/v1/auth/login",
     str(fd, "login_email"),
-    str(fd, "site_url"),
-    str(fd, "site_cookie"),
-    str(fd, "sitespeed_command"),
+    JSON.stringify(vars, null, 2),
     id,
   );
   // An empty password field keeps the stored one, so it never has to be sent back to the page.
   const password = String(fd.get("login_password") ?? "");
   if (password) db.prepare("UPDATE projects SET login_password = ? WHERE id = ?").run(password, id);
+  revalidatePath(PROJECT_PAGE, "page");
+}
+
+export async function updatePageSettings(fd: FormData) {
+  db.prepare(`UPDATE projects SET site_url = ?, site_cookie = ?, sitespeed_command = ? WHERE id = ?`).run(
+    str(fd, "site_url"),
+    str(fd, "site_cookie"),
+    str(fd, "sitespeed_command"),
+    int(fd, "id"),
+  );
   revalidatePath(PROJECT_PAGE, "page");
 }
 

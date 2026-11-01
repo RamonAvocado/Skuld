@@ -12,7 +12,7 @@ import {
   createSuite,
   updateSuite,
   deleteSuite,
-  updatePerfSettings,
+  updatePageSettings,
 } from "@/lib/actions";
 import type { Suite } from "@/lib/db";
 import { DEFAULT_SITESPEED_COMMAND } from "@/lib/presets";
@@ -39,11 +39,6 @@ export type SettingsProject = {
   root_dir: string;
   enable_tests: number;
   enable_perf: number;
-  api_base_url: string;
-  login_path: string;
-  login_email: string;
-  /** Whether a password is stored; the password itself never reaches the page. */
-  has_password: boolean;
   site_url: string;
   site_cookie: string;
   sitespeed_command: string;
@@ -199,27 +194,9 @@ export function ProjectSettings({
             </details>
           </TabsContent>
           <TabsContent value="settings/performance" className={PANEL_CLASS}>
-            <form action={updatePerfSettings} className="flex max-w-md flex-col gap-3">
+            <form action={updatePageSettings} className="flex max-w-md flex-col gap-3">
               <input type="hidden" name="id" value={projectId} />
-              <h4 className="font-medium">Endpoints</h4>
-              <Field name="api_base_url" label="API base URL" defaultValue={project.api_base_url} placeholder="http://localhost:8000" mono />
-              <Field name="login_path" label="Login path" defaultValue={project.login_path} mono />
-              <Field name="login_email" label="Login email" defaultValue={project.login_email} />
-              <Field
-                name="login_password"
-                label="Login password"
-                defaultValue=""
-                type="password"
-                placeholder={project.has_password ? "Saved — leave empty to keep" : ""}
-              />
-              <p className="-mt-2 text-xs text-muted-foreground">
-                Skuld logs in before each run and sends the token as a Bearer. <code>{"{userId}"}</code> in a
-                path becomes the id from the login response. Use a test account: the password is stored in
-                Skuld&apos;s local database.
-              </p>
-
-              <Separator />
-
+              <p className="text-xs text-muted-foreground">Endpoint login and variables live on the Endpoints tab.</p>
               <h4 className="font-medium">Pages</h4>
               <Field name="site_url" label="Site URL" defaultValue={project.site_url} placeholder="http://localhost:3000" mono />
               <Field name="site_cookie" label="Cookie (optional)" defaultValue={project.site_cookie} placeholder="session=…" mono />
@@ -246,7 +223,7 @@ export function ProjectSettings({
   );
 }
 
-function Field({
+export function Field({
   name,
   label,
   defaultValue,

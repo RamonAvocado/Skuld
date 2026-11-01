@@ -91,3 +91,10 @@ test("parseHar takes the median of sitespeed.io's runs per URL", () => {
   });
   expect(m).toEqual({ url: "http://s/a", status: 200, ms: 200, ttfb: 20, bytes: 40, requests: 2, fcp: 100, lcp: 200 });
 });
+
+test("fillPath fills and encodes every {var}, or names the missing ones", () => {
+  expect(perf.fillPath("/s/{userId}/x/{id}", { userId: "u 1", id: "7" })).toEqual({ path: "/s/u%201/x/7" });
+  expect(perf.fillPath("/s/{userId}/x/{id}/{k}", { userId: "u", id: "" })).toEqual({ missing: ["id", "k"] });
+  expect(perf.parseVars('{"a": 1, "b": null}')).toEqual({ a: "1", b: "" });
+  expect(perf.parseVars("not json")).toEqual({});
+});

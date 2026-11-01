@@ -1,7 +1,11 @@
 import { ExternalLinkIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { listPerfEntries, listPerfRuns, perfResultsForRun, perfSeries, type PerfKind, type PerfResult } from "@/lib/db";
-import { createPerfEntry, deletePerfEntry, runPerfAction } from "@/lib/actions";
+import { getProject, listPerfEntries, listPerfRuns, perfResultsForRun, perfSeries, type PerfKind, type PerfResult } from "@/lib/db";
+import { createPerfEntry, deletePerfEntry, runPerfAction, updateEndpointSettings } from "@/lib/actions";
+import { parseVars, pathVars } from "@/lib/perf";
+import { Field } from "@/components/project-settings";
+import { Textarea } from "@mimird/ui/components/textarea";
+import { Label } from "@mimird/ui/components/label";
 import { RunButton } from "@/components/run-button";
 import { PerfChart } from "@/components/perf-chart";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
@@ -46,6 +50,7 @@ export function PerfPanel({ projectId, kind }: { projectId: number; kind: PerfKi
 
   return (
     <div className="grid gap-4">
+      {!isPage && <RunSettings projectId={projectId} paths={entries.map((e) => e.path)} />}
       <Card>
         <CardHeader>
           <CardTitle>
@@ -195,6 +200,62 @@ export function PerfPanel({ projectId, kind }: { projectId: number; kind: PerfKi
         </details>
       )}
     </div>
+  );
+}
+
+// Who Skuld logs in as, and the values for every {placeholder} in the endpoint paths.
+function RunSettings({ projectId, paths }: { projectId: number; paths: string[] }) {
+  const project = getProject(projectId)!;
+  const stored = parseVars(project.perf_vars);
+  const used = [...new Set(paths.flatMap(pathVars))].filter((v) => v !== "userId").sort();
+  // Every variable the paths use shows up, empty until filled in.
+  const vars: Record<string, string> = { ...Object.fromEntries(used.map((v) => [v, ""])), ...stored };
+  const json = JSON.stringify(vars, null, 2);
+  const missing = used.filter((v) => !vars[v]);
+  return (
+    <details className={detailsCls} open={!project.api_base_url || undefined}>
+      <summary className={summaryCls}>
+        <Chevron />
+        <span className="font-medium">Run settings</span>
+        <span className="min-w-0 truncate text-muted-foreground">
+          {project.login_email || "no login"}
+          {missing.length > 0 && <span className="text-destructive"> · {missing.length} variables without a value</span>}
+        </span>
+      </summary>
+      <form action={updateEndpointSettings} className="mt-3 grid gap-3 md:grid-cols-2">
+        <input type="hidden" name="id" value={projectId} />
+        <div className="grid content-start gap-3">
+          <Field name="api_base_url" label="API base URL" defaultValue={project.api_base_url} placeholder="http://localhost:8000" mono />
+          <Field name="login_path" label="Login path" defaultValue={project.login_path} mono />
+          <Field name="login_email" label="Login email" defaultValue={project.login_email} />
+          <Field
+            name="login_password"
+            label="Login password"
+            defaultValue=""
+            type="password"
+            placeholder={project.login_password ? "Saved — leave empty to keep" : ""}
+          />
+        </div>
+        <div className="grid content-start gap-1.5">
+          <Label htmlFor="perf-vars">Variables (JSON)</Label>
+          <Textarea
+            key={json}
+            id="perf-vars"
+            name="perf_vars"
+            defaultValue={json}
+            rows={Math.min(Math.max(used.length + 2, 6), 20)}
+            spellCheck={false}
+            className="font-mono text-xs"
+          />
+          {missing.length > 0 && (
+            <p className="text-xs text-destructive">Missing: {missing.map((v) => `{${v}}`).join(", ")}</p>
+          )}
+        </div>
+        <Button type="submit" size="sm" className="w-fit">
+          Save
+        </Button>
+      </form>
+    </details>
   );
 }
 

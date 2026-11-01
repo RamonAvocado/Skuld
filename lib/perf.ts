@@ -36,6 +36,29 @@ export function joinUrl(base: string, path: string): string {
   return base.replace(/\/+$/, "") + (path.startsWith("/") ? path : `/${path}`);
 }
 
+/** The {placeholder} names in an endpoint path. */
+export function pathVars(path: string): string[] {
+  return [...path.matchAll(/\{(\w+)\}/g)].map((m) => m[1]!);
+}
+
+/** Fills every {name} from vars; empty values count as missing. */
+export function fillPath(path: string, vars: Record<string, string>): { path: string } | { missing: string[] } {
+  const missing = pathVars(path).filter((v) => !vars[v]);
+  if (missing.length) return { missing };
+  return { path: path.replace(/\{(\w+)\}/g, (_, v: string) => encodeURIComponent(vars[v]!)) };
+}
+
+/** The stored perf_vars as strings; anything unparseable reads as no variables. */
+export function parseVars(json: string): Record<string, string> {
+  try {
+    const o = JSON.parse(json || "{}");
+    if (!o || typeof o !== "object" || Array.isArray(o)) return {};
+    return Object.fromEntries(Object.entries(o).map(([k, v]) => [k, v == null ? "" : String(v)]));
+  } catch {
+    return {};
+  }
+}
+
 export async function runPerf(projectId: number, kind: PerfKind): Promise<RunResult> {
   const project = getProject(projectId);
   if (!project) return { ok: false, error: "project not found" };
@@ -73,10 +96,12 @@ async function login(project: Project): Promise<{ token: string; userId: string 
 }
 
 async function measureEndpoints(project: Project, entries: PerfEntry[]): Promise<Measured> {
-  if (!project.api_base_url) return { error: "set the API base URL in Settings → Performance" };
+  if (!project.api_base_url) return { error: "set the API base URL in Run settings" };
   const auth = await login(project);
   if ("error" in auth) return auth;
 
+  // Values from the JSON win, so {userId} can be pinned to another user.
+  const vars = { userId: auth.userId, ...parseVars(project.perf_vars) };
   const headers: Record<string, string> = auth.token ? { Authorization: `Bearer ${auth.token}` } : {};
   const results: Result[] = [];
   // One request at a time, so they don't slow each other down.
@@ -88,7 +113,12 @@ async function measureEndpoints(project: Project, entries: PerfEntry[]): Promise
       r.error = "only GET endpoints are measured";
       continue;
     }
-    const url = joinUrl(project.api_base_url, entry.path.replaceAll("{userId}", encodeURIComponent(auth.userId)));
+    const filled = fillPath(entry.path, vars);
+    if ("missing" in filled) {
+      r.error = `no value for ${filled.missing.map((v) => `{${v}}`).join(", ")}`;
+      continue;
+    }
+    const url = joinUrl(project.api_base_url, filled.path);
     const times: number[] = [];
     const ttfbs: number[] = [];
     try {

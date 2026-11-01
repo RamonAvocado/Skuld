@@ -175,6 +175,8 @@ function open(): DatabaseSync {
     "site_url TEXT NOT NULL DEFAULT ''",
     "site_cookie TEXT NOT NULL DEFAULT ''",
     "sitespeed_command TEXT NOT NULL DEFAULT ''",
+    // JSON object of values for {placeholders} in endpoint paths.
+    "perf_vars TEXT NOT NULL DEFAULT '{}'",
   ]) {
     try {
       db.exec(`ALTER TABLE projects ADD COLUMN ${col}`);
@@ -247,6 +249,7 @@ export type Project = {
   site_url: string;
   site_cookie: string;
   sitespeed_command: string;
+  perf_vars: string;
 };
 
 export type Suite = {

@@ -24,4 +24,10 @@ services:
       # Skuld runs test commands inside the projects it tracks, so mount each checkout
       # at the path you register it under:
       # - /path/to/project:/path/to/project
+    networks:
+      - mimird
     restart: unless-stopped
+
+networks:
+  mimird:
+    external: true
