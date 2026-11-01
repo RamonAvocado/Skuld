@@ -19,6 +19,7 @@ const USAGE = `skuld <command>   (<project> = uuid or name; ids come from the li
   tests <project> [--area A] [--todo]
   tests add <project> <area> [--layer unit|integration|e2e|...] <title>...   (creates the area if missing)
   tests move <area> <test-id>...                                             (creates the area if missing)
+  tests rename <test-id> <title>
   tests done|todo|rm <test-id>...
   tests link <test-id> <discovered-key>
   discovered <project> [--unlinked]
@@ -129,6 +130,8 @@ switch (cmd) {
       for (const id of ids(rest.slice(1))) {
         db.prepare("UPDATE planned_tests SET area_id = ? WHERE id = ?").run(areaId(projectOfTest(id), name), id);
       }
+    } else if (sub === "rename") {
+      db.prepare("UPDATE planned_tests SET title = ? WHERE id = ?").run(rest[1] ?? die(USAGE), ids([rest[0]!])[0]!);
     } else if (sub === "done" || sub === "todo") {
       for (const id of ids(rest)) db.prepare("UPDATE planned_tests SET status = ? WHERE id = ?").run(sub, id);
     } else if (sub === "rm") {

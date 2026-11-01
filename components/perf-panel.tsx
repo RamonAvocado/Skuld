@@ -103,7 +103,7 @@ export function PerfPanel({ projectId, kind }: { projectId: number; kind: PerfKi
           {entries.map((e) => {
             const latest = latestByEntry.get(e.id);
             return (
-              <details key={e.id} className={detailsCls}>
+              <details key={e.id} className={detailsCls} suppressHydrationWarning>
                 <summary className={summaryCls}>
                   <Chevron />
                   {e.area && <Badge variant="outline">{e.area}</Badge>}
@@ -168,7 +168,7 @@ export function PerfPanel({ projectId, kind }: { projectId: number; kind: PerfKi
       {runs.length > 1 && (
         <div className="grid gap-3">
           {runs.slice(1).map((r) => (
-            <details key={r.id} className={detailsCls}>
+            <details key={r.id} className={detailsCls} suppressHydrationWarning>
               <summary className={summaryCls}>
                 <Chevron />
                 <span className="font-medium tabular-nums">{new Date(r.finished_at).toLocaleString()}</span>
@@ -191,7 +191,7 @@ export function PerfPanel({ projectId, kind }: { projectId: number; kind: PerfKi
       )}
 
       {last?.log && (
-        <details className={detailsCls}>
+        <details className={detailsCls} suppressHydrationWarning>
           <summary className={summaryCls}>
             <Chevron />
             Log of the latest run
@@ -213,7 +213,7 @@ function RunSettings({ projectId, paths }: { projectId: number; paths: string[] 
   const json = JSON.stringify(vars, null, 2);
   const missing = used.filter((v) => !vars[v]);
   return (
-    <details className={detailsCls} open={!project.api_base_url || undefined}>
+    <details className={detailsCls} open={!project.api_base_url || undefined} suppressHydrationWarning>
       <summary className={summaryCls}>
         <Chevron />
         <span className="font-medium">Run settings</span>

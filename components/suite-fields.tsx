@@ -99,7 +99,7 @@ export function SuiteFields({
       </div>
 
       {/* native <details>: closed fields stay mounted, so they still submit */}
-      <details className="group">
+      <details className="group" suppressHydrationWarning>
         <summary className={`${summaryCls} font-medium`}>
           <Chevron />
           Advanced: command &amp; paths
@@ -138,7 +138,7 @@ export function SuiteFields({
                   />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label htmlFor="suite-coverage-path">Coverage XML path (optional)</Label>
+                  <Label htmlFor="suite-coverage-path">Coverage report path (optional, Cobertura XML or lcov)</Label>
                   <Input
                     id="suite-coverage-path"
                     name="coverage_xml_path"

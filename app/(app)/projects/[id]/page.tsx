@@ -69,7 +69,8 @@ export default async function ProjectPage({
   const langData = last ? languageBreakdown(last.id) : [];
   // node:sqlite rows have a null prototype — plain-object them before
   // crossing the server→client boundary into EditPlannedTestDialog.
-  const areaOptions = areas.map((a) => ({ id: a.id, name: a.name }));
+  const groups = areas.filter((a) => a.is_auto !== 1);
+  const areaOptions = groups.map((a) => ({ id: a.id, name: a.name }));
   const discoveredKeys = discovered.map((d) => d.key);
   // Each linked test's time in the latest run vs the run before it.
   const duration = new Map(discovered.map((d) => [d.key, d.duration_ms]));
@@ -203,13 +204,13 @@ export default async function ProjectPage({
           <div className="flex justify-end">
             <RunButton projectId={projectId} />
           </div>
-          <details className={detailsCls}>
+          <details className={detailsCls} suppressHydrationWarning>
             <summary className={summaryCls}>
               <Chevron />
               <span className="font-medium">TODO</span>
               <span className="text-muted-foreground">{todo.length === 0 ? "nothing outstanding" : `${todo.length} left`}</span>
               <span className="ml-auto">
-                <NewTestDialog projectId={projectId} areas={areas.filter((a) => a.is_auto !== 1).map((a) => ({ id: a.id, name: a.name }))} />
+                <NewTestDialog projectId={projectId} areas={areaOptions} />
               </span>
             </summary>
             {todo.length > 0 && (
@@ -229,6 +230,8 @@ export default async function ProjectPage({
 
           {areas.map((area) => {
             const planned = plannedForArea(area.id);
+            // The auto area only shows up while it holds newly discovered tests to sort.
+            if (area.is_auto === 1 && planned.length === 0) return null;
             const done = planned.filter((p) => p.status === "done").length;
             const linked = planned.flatMap((p) => (p.discovered_test_key && outcome.has(p.discovered_test_key) ? [p.discovered_test_key] : []));
             const failing = linked.filter((k) => outcome.get(k) !== "passed").length;
@@ -236,7 +239,7 @@ export default async function ProjectPage({
             const color = colorOf.get(area.id)!;
             return (
               <AreaDropZone key={area.id} areaId={area.id} projectId={projectId}>
-                <details className={detailsCls}>
+                <details className={detailsCls} suppressHydrationWarning>
                   <summary className={summaryCls + " flex-nowrap"}>
                     <Chevron />
                     <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: color }} />
@@ -349,11 +352,11 @@ export default async function ProjectPage({
             <CardContent>
               <GroupEvolutionChart
                 data={areaSeries(projectId)}
-                groups={areas.map((a) => ({ id: a.id, name: a.name, color: colorOf.get(a.id)! }))}
+                groups={groups.map((a) => ({ id: a.id, name: a.name, color: colorOf.get(a.id)! }))}
               />
             </CardContent>
           </Card>
-          <details className={detailsCls}>
+          <details className={detailsCls} suppressHydrationWarning>
             <summary className={summaryCls}>
               <Chevron />
               <span className="font-medium">Runs</span>
@@ -365,7 +368,7 @@ export default async function ProjectPage({
                 const tests = discoveredForRun(r.id);
                 const cov = coverageForRun(r.id);
                 return (
-                  <details key={r.id} className={detailsCls}>
+                  <details key={r.id} className={detailsCls} suppressHydrationWarning>
                     <summary className={summaryCls}>
                       <Chevron />
                       <span className="font-medium tabular-nums">

@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { parseJUnit, parseCobertura } from "./parse";
+import { parseJUnit, parseCobertura, parseLcov } from "./parse";
 
 const JUNIT = `<?xml version="1.0"?>
 <testsuites>
@@ -56,4 +56,14 @@ test("parseCobertura reads totals and per-file lines", () => {
   const auth = r.files.find((f) => f.path === "app/auth.py")!;
   expect(auth.lines_valid).toBe(2);
   expect(auth.lines_covered).toBe(1);
+});
+
+test("parseLcov sums per-file lines found/hit", () => {
+  const r = parseLcov("TN:\nSF:lib/a.ts\nFNF:1\nLF:10\nLH:8\nend_of_record\nTN:\nSF:lib/b.ts\nLF:0\nLH:0\nend_of_record\n");
+  expect(r.files).toEqual([
+    { path: "lib/a.ts", line_rate: 0.8, lines_covered: 8, lines_valid: 10 },
+    { path: "lib/b.ts", line_rate: 0, lines_covered: 0, lines_valid: 0 },
+  ]);
+  expect(r.lineRate).toBe(0.8);
+  expect(r.branchRate).toBe(0);
 });

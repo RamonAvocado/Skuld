@@ -8,11 +8,12 @@ test("findPreset returns the pytest preset with expected command/junitPath", () 
   expect(preset!.junitPath).toBe(".skuld/pytest-junit.xml");
 });
 
-test("findPreset returns the Bun test preset with no coverage path", () => {
+test("findPreset returns the Bun test preset with lcov coverage", () => {
   const preset = findPreset("typescript", "bun-test");
   expect(preset).toBeDefined();
   expect(preset!.command).toContain("bun test");
-  expect(preset!.coveragePath).toBe("");
+  expect(preset!.command).toContain("--coverage-reporter=lcov");
+  expect(preset!.coveragePath).toBe(".skuld/bun-coverage/lcov.info");
 });
 
 test("findPreset returns the Playwright preset with no coverage path", () => {

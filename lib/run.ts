@@ -3,7 +3,7 @@ import { promisify } from "node:util";
 import { readFile, mkdir } from "node:fs/promises";
 import { join, isAbsolute, dirname } from "node:path";
 import { db, getProject, listSuites, autoImportDiscoveredTests, type Project, type Suite } from "./db";
-import { parseJUnit, parseCobertura, type JUnitResult, type CoberturaResult } from "./parse";
+import { parseJUnit, parseCobertura, parseLcov, type JUnitResult, type CoberturaResult } from "./parse";
 
 const pexec = promisify(execFile);
 
@@ -63,7 +63,8 @@ async function runSuite(project: Project, suite: Suite): Promise<SuiteRunResult>
   let coverage: CoberturaResult = { lineRate: 0, branchRate: 0, files: [] };
   if (suite.coverage_xml_path) {
     try {
-      coverage = parseCobertura(await readFile(resolveIn(project.root_dir, suite.coverage_xml_path), "utf8"));
+      const text = await readFile(resolveIn(project.root_dir, suite.coverage_xml_path), "utf8");
+      coverage = suite.coverage_xml_path.endsWith(".xml") ? parseCobertura(text) : parseLcov(text);
     } catch {
       /* coverage optional */
     }

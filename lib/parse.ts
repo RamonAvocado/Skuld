@@ -103,3 +103,19 @@ export function parseCobertura(xml: string): CoberturaResult {
     files,
   };
 }
+
+// lcov (Bun's only file reporter): per-file SF/LH/LF records. No branch data from Bun.
+export function parseLcov(text: string): CoberturaResult {
+  const files: CoverageFile[] = [];
+  for (const rec of text.split("end_of_record")) {
+    const get = (k: string) => rec.match(new RegExp(`^${k}:(.*)$`, "m"))?.[1]?.trim();
+    const path = get("SF");
+    if (!path) continue;
+    const valid = Number(get("LF") ?? 0);
+    const covered = Number(get("LH") ?? 0);
+    files.push({ path, line_rate: valid ? covered / valid : 0, lines_covered: covered, lines_valid: valid });
+  }
+  const valid = files.reduce((n, f) => n + f.lines_valid, 0);
+  const covered = files.reduce((n, f) => n + f.lines_covered, 0);
+  return { lineRate: valid ? covered / valid : 0, branchRate: 0, files };
+}

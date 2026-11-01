@@ -153,7 +153,7 @@ export function ProjectSettings({
             <h4 className="font-medium">Suites</h4>
             {suites.length === 0 && <p className="text-muted-foreground">No suites yet.</p>}
             {suites.map((suite) => (
-              <details key={suite.id} className={detailsCls}>
+              <details key={suite.id} className={detailsCls} suppressHydrationWarning>
                 <summary className={summaryCls}>
                   <Chevron />
                   <span className="font-medium">{suite.name || `${suite.language}/${suite.framework}`}</span>
@@ -194,7 +194,7 @@ export function ProjectSettings({
               </details>
             ))}
 
-            <details className={detailsCls}>
+            <details className={detailsCls} suppressHydrationWarning>
               <summary className={summaryCls + " font-medium"}>
                 <Chevron />
                 Add suite

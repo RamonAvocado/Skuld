@@ -25,14 +25,12 @@ export const PRESETS: Preset[] = [
     language: "typescript",
     framework: "bun-test",
     label: "Bun test",
-    // Confirmed against `bun test --help` (Bun 1.4.2): --reporter=junit
-    // requires --reporter-outfile. Coverage isn't included: Bun's
-    // --coverage-reporter only supports text/lcov, never Cobertura, and
-    // parseCobertura can't read either of those — so coverage stays unset
-    // (already a supported, silently-skipped-when-missing path in run.ts).
-    command: "bun test --reporter=junit --reporter-outfile=.skuld/bun-junit.xml",
+    // --reporter=junit requires --reporter-outfile; coverage is lcov (Bun has no Cobertura).
+    // Bun only covers files the tests import, so untested files don't count against the rate.
+    command:
+      "bun test --reporter=junit --reporter-outfile=.skuld/bun-junit.xml --coverage --coverage-reporter=lcov --coverage-dir=.skuld/bun-coverage",
     junitPath: ".skuld/bun-junit.xml",
-    coveragePath: "",
+    coveragePath: ".skuld/bun-coverage/lcov.info",
   },
   {
     language: "typescript",
@@ -46,8 +44,7 @@ export const PRESETS: Preset[] = [
     // configure a reporter there.
     command: "PLAYWRIGHT_JUNIT_OUTPUT_NAME=.skuld/playwright-junit.xml npx playwright test --reporter=junit",
     junitPath: ".skuld/playwright-junit.xml",
-    // Playwright doesn't emit Cobertura coverage either — same reasoning as
-    // the Bun preset, coverage stays optional/unset.
+    // Playwright doesn't emit line coverage on its own, so it stays unset.
     coveragePath: "",
   },
 ];
