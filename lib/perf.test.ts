@@ -100,23 +100,25 @@ test("fillPath fills and encodes every {var}, or names the missing ones", () => 
 });
 
 test("pagesScript measures public pages, then logs in, then private pages", async () => {
-  const s = perf.pagesScript(["http://s/pricing"], ["http://s/watchlist/AAPL"], { url: "http://s/login", email: "a@b.c", password: 'p"w' });
+  const s = perf.pagesScript(["http://s/broken", "http://s/pricing"], ["http://s/watchlist/AAPL"], { url: "http://s/login", email: "a@b.c", password: 'p"w' });
   const mod: { exports?: (context: unknown, commands: unknown) => Promise<void> } = {};
   new Function("module", s)(mod);
   const calls: string[] = [];
   const log = (name: string) => async (...args: unknown[]) => void calls.push(`${name} ${args.join(" ")}`);
-  await mod.exports!({}, {
-    measure: { start: log("measure") },
+  await mod.exports!({ log: { error: log("error") } }, {
+    measure: { start: async (url: string) => { calls.push(`measure ${url}`); if (url.endsWith("/broken")) throw new Error("no load"); } },
     navigate: log("navigate"),
     addText: { byName: log("type") },
-    click: { bySelectorAndWait: log("click") },
+    click: log("click"),
   });
   expect(calls).toEqual([
+    "measure http://s/broken",
+    "error skuld: http://s/broken failed: no load",
     "measure http://s/pricing",
     "navigate http://s/login",
     "type a@b.c email",
     'type p"w password',
-    "click button[type=submit]",
+    "click button[type=submit] [object Object]",
     "measure http://s/watchlist/AAPL",
   ]);
 });

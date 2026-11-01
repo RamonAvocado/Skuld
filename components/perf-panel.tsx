@@ -2,7 +2,7 @@ import { ExternalLinkIcon, LockIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getProject, listPerfEntries, listPerfRuns, perfResultsForRun, perfSeries, type PerfKind, type PerfResult } from "@/lib/db";
 import { runPerfAction, updatePerfSettings } from "@/lib/actions";
-import { parseVars, pathVars } from "@/lib/perf";
+import { parseVars, pathVars, perfStatus } from "@/lib/perf";
 import { Field } from "@/components/project-settings";
 import { Textarea } from "@mimird/ui/components/textarea";
 import { Label } from "@mimird/ui/components/label";
@@ -13,6 +13,7 @@ import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@mimird/ui
 import { Button } from "@mimird/ui/components/button";
 import { Badge } from "@mimird/ui/components/badge";
 import { PerfEntryDialog } from "@/components/perf-entry-dialog";
+import { AutoRefresh } from "@/components/auto-refresh";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@mimird/ui/components/table";
 
 export function ms(n: number) {
@@ -45,6 +46,7 @@ export function PerfPanel({ projectId, kind }: { projectId: number; kind: PerfKi
   const series = perfSeries(projectId, kind);
   const isPage = kind === "page";
   const noun = isPage ? "page" : "endpoint";
+  const { progress, error } = perfStatus(projectId, kind);
 
   return (
     <div className="grid gap-4">
@@ -77,10 +79,42 @@ export function PerfPanel({ projectId, kind }: { projectId: number; kind: PerfKi
               variant="outline"
               action={runPerfAction}
               kind={kind}
+              running={Boolean(progress)}
             />
           </CardAction>
         </CardHeader>
-        <CardContent>
+        <CardContent className="grid gap-3">
+          <div aria-live="polite" className="empty:hidden">
+            {progress && (
+              <div className="grid gap-1.5 text-sm">
+                <AutoRefresh />
+                <div className="flex flex-wrap items-baseline gap-x-2 text-muted-foreground">
+                  <span className="font-medium text-foreground">Running…</span>
+                  <span className="tabular-nums">
+                    {Math.min(progress.done, progress.total)}/{progress.total}
+                  </span>
+                  {progress.current && <span className="min-w-0 truncate font-mono text-xs">{progress.current}</span>}
+                  <span className="ml-auto tabular-nums">since {new Date(progress.startedAt).toLocaleTimeString()}</span>
+                </div>
+                <div
+                  role="progressbar"
+                  aria-label={`${isPage ? "Page" : "Endpoint"} run progress`}
+                  aria-valuemin={0}
+                  aria-valuemax={progress.total}
+                  aria-valuenow={Math.min(progress.done, progress.total)}
+                  className="h-1.5 overflow-hidden rounded-full bg-muted"
+                >
+                  <div
+                    className="h-full bg-primary transition-[width]"
+                    style={{ width: `${progress.total ? (Math.min(progress.done, progress.total) / progress.total) * 100 : 0}%` }}
+                  />
+                </div>
+              </div>
+            )}
+            {!progress && error && (
+              <p className="text-sm break-words whitespace-pre-wrap text-destructive">Last run failed: {error.slice(0, 600)}</p>
+            )}
+          </div>
           {results.length === 0 ? (
             <p className="text-sm text-muted-foreground">No runs yet.</p>
           ) : (

@@ -59,14 +59,45 @@ export function parseVars(json: string): Record<string, string> {
   }
 }
 
+export type PerfProgress = { startedAt: string; done: number; total: number; current: string };
+
+// Runs in progress and the last failure per project+kind, so a reloaded page can still show
+// what's going on (the original request, and its error redirect, belong to the old tab).
+// ponytail: per-process memory; a restart forgets it, which is fine since the run dies with it.
+// On globalThis so dev hot reloads of this module don't forget runs that are still going.
+const g = globalThis as { skuldPerfRunning?: Map<string, PerfProgress>; skuldPerfError?: Map<string, string> };
+const running = (g.skuldPerfRunning ??= new Map());
+const lastError = (g.skuldPerfError ??= new Map());
+
+export function perfStatus(projectId: number, kind: PerfKind): { progress?: PerfProgress; error?: string } {
+  const key = `${projectId}:${kind}`;
+  return { progress: running.get(key), error: lastError.get(key) };
+}
+
 export async function runPerf(projectId: number, kind: PerfKind): Promise<RunResult> {
   const project = getProject(projectId);
   if (!project) return { ok: false, error: "project not found" };
   const entries = listPerfEntries(projectId, kind);
   if (entries.length === 0) return { ok: false, error: `no ${kind}s to measure yet — add one first` };
+  const key = `${projectId}:${kind}`;
+  if (running.has(key)) return { ok: false, error: `a ${kind} run is already in progress — wait for it to finish` };
 
   const started_at = new Date().toISOString();
-  const out = kind === "endpoint" ? await measureEndpoints(project, entries) : await measurePages(project, entries, started_at);
+  const progress: PerfProgress = { startedAt: started_at, done: 0, total: entries.length, current: "" };
+  running.set(key, progress);
+  lastError.delete(key);
+  let out: Measured;
+  try {
+    out =
+      kind === "endpoint"
+        ? await measureEndpoints(project, entries, progress)
+        : await measurePages(project, entries, started_at, progress);
+  } catch (e) {
+    out = { error: (e as Error).message };
+  } finally {
+    running.delete(key);
+  }
+  if ("error" in out) lastError.set(key, out.error);
   if ("error" in out) return { ok: false, error: out.error };
 
   const runId = insertPerfRun(project.id, kind, started_at, out.results, out.reportDir, out.log);
@@ -95,7 +126,7 @@ async function login(project: Project): Promise<{ token: string; userId: string 
   }
 }
 
-async function measureEndpoints(project: Project, entries: PerfEntry[]): Promise<Measured> {
+async function measureEndpoints(project: Project, entries: PerfEntry[], progress: PerfProgress): Promise<Measured> {
   if (!project.api_base_url) return { error: "set the API base URL in Run settings" };
   const auth = await login(project);
   if ("error" in auth) return auth;
@@ -106,6 +137,8 @@ async function measureEndpoints(project: Project, entries: PerfEntry[]): Promise
   const results: Result[] = [];
   // One request at a time, so they don't slow each other down.
   for (const entry of entries) {
+    progress.current = entry.path;
+    progress.done = results.length;
     const r: Result = { entry, status: 0, ms: 0, p95: 0, ttfb: 0, bytes: 0, requests: 1, fcp: 0, lcp: 0, error: "", reportPath: "" };
     results.push(r);
     // Reads only: a run must never change the backend's data.
@@ -152,21 +185,29 @@ async function measureEndpoints(project: Project, entries: PerfEntry[]): Promise
  */
 export function pagesScript(publicUrls: string[], privateUrls: string[], login: { url: string; email: string; password: string }): string {
   const j = JSON.stringify;
-  return `module.exports = async (context, commands) => {
-  for (const url of ${j(publicUrls)}) await commands.measure.start(url);
+  return `// One page that won't load is reported as missing instead of ending the run for the pages after it.
+const measure = async (context, commands, url) => {
+  try {
+    await commands.measure.start(url);
+  } catch (e) {
+    context.log.error("skuld: " + url + " failed: " + e.message);
+  }
+};
+module.exports = async (context, commands) => {
+  for (const url of ${j(publicUrls)}) await measure(context, commands, url);
   const privateUrls = ${j(privateUrls)};
   if (privateUrls.length === 0) return;
   // ponytail: Mimird's login form (name="email", name="password", submit button); make these settings for other sites.
   await commands.navigate(${j(login.url)});
   await commands.addText.byName(${j(login.email)}, "email");
   await commands.addText.byName(${j(login.password)}, "password");
-  await commands.click.bySelectorAndWait("button[type=submit]");
-  for (const url of privateUrls) await commands.measure.start(url);
+  await commands.click("button[type=submit]", { wait: true });
+  for (const url of privateUrls) await measure(context, commands, url);
 };
 `;
 }
 
-async function measurePages(project: Project, entries: PerfEntry[], started_at: string): Promise<Measured> {
+async function measurePages(project: Project, entries: PerfEntry[], started_at: string, progress: PerfProgress): Promise<Measured> {
   if (!project.site_url) return { error: "set the site URL in Run settings" };
   const vars = parseVars(project.perf_vars);
   const urls = new Map<number, string>();
@@ -180,6 +221,15 @@ async function measurePages(project: Project, entries: PerfEntry[], started_at: 
   if (measured.length === 0) return { error: "no page has values for all its {variables} — fill them in Run settings" };
   const privateUrls = measured.filter((e) => e.login).map((e) => urls.get(e.id)!);
   if (privateUrls.length > 0 && !project.login_email) return { error: "some pages need login: set the login email in Run settings" };
+
+  // Fail in seconds, not after browsertime's minutes of retries, when the site can't be reached at all.
+  try {
+    await fetch(project.site_url, { redirect: "manual", signal: AbortSignal.timeout(10_000) });
+  } catch (e) {
+    return {
+      error: `can't reach ${project.site_url} from Skuld (${(e as Error).cause ?? (e as Error).message}) — is the site running, and if Skuld is in Docker, does a firewall block it?`,
+    };
+  }
 
   const reportDir = `${project.id}-${started_at.replace(/[:.]/g, "-")}`;
   const cwd = join(REPORTS_DIR, reportDir);
@@ -195,7 +245,17 @@ async function measurePages(project: Project, entries: PerfEntry[], started_at: 
   const cmd = (project.sitespeed_command || DEFAULT_SITESPEED_COMMAND).replace(/\burls\.txt\b/, "pages.cjs --multi");
   // Skuld's own node_modules/.bin first, so the bundled sitespeed.io is found.
   const PATH = `${join(process.cwd(), "node_modules", ".bin")}:${process.env.PATH ?? ""}`;
-  const shell = await sh(cmd, cwd, { ...process.env, PATH });
+  // sitespeed.io logs "Testing url <url> iteration <n>" as it starts each page.
+  const iterations = Number(/(?:^|\s)(?:-n|--browsertime\.iterations)[ =](\d+)/.exec(cmd)?.[1] ?? 3);
+  progress.total = measured.length * iterations;
+  const shell = await sh(cmd, cwd, { ...process.env, PATH }, (chunk) => {
+    for (const m of chunk.matchAll(/Testing url (\S+) iteration (\d+)/g)) {
+      progress.done++;
+      progress.current = `${new URL(m[1]!).pathname} (iteration ${m[2]})`;
+    }
+  });
+  // The error toast only fits a few lines; the whole output stays next to the report.
+  await writeFile(join(cwd, "sitespeed.log"), shell.out);
 
   const pages = new Map<string, PageMetrics & { reportPath: string }>();
   try {
@@ -208,7 +268,7 @@ async function measurePages(project: Project, entries: PerfEntry[], started_at: 
   } catch {
     /* no report: every entry is reported as failed below */
   }
-  if (pages.size === 0) return { error: `sitespeed.io exited ${shell.code} without a report\n${shell.out.slice(-2000)}` };
+  if (pages.size === 0) return { error: `sitespeed.io exited ${shell.code} without a report, see perf-reports/${reportDir}/sitespeed.log\n${shell.out.slice(-2000)}` };
 
   const failed = (entry: PerfEntry, error: string): Result => ({ entry, status: 0, ms: 0, p95: 0, ttfb: 0, bytes: 0, requests: 0, fcp: 0, lcp: 0, error, reportPath: "" });
   const results: Result[] = entries.map((entry) => {

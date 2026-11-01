@@ -10,14 +10,17 @@ const pexec = promisify(execFile);
 
 type Sh = { code: number; out: string };
 
-export async function sh(cmd: string, cwd: string, env?: NodeJS.ProcessEnv): Promise<Sh> {
+/** Runs cmd through sh; onOutput sees its output as it arrives (for progress). */
+export async function sh(cmd: string, cwd: string, env?: NodeJS.ProcessEnv, onOutput?: (chunk: string) => void): Promise<Sh> {
   try {
-    const { stdout, stderr } = await pexec("/bin/sh", ["-c", cmd], {
+    const run = pexec("/bin/sh", ["-c", cmd], {
       cwd,
       env,
       maxBuffer: 20 * 1024 * 1024,
       timeout: 20 * 60 * 1000, // ponytail: blocking 20-min ceiling per suite; add a job queue if suites outgrow it
     });
+    if (onOutput) for (const out of [run.child.stdout, run.child.stderr]) out?.on("data", (d) => onOutput(String(d)));
+    const { stdout, stderr } = await run;
     return { code: 0, out: stdout + stderr };
   } catch (e) {
     const err = e as { code?: number; stdout?: string; stderr?: string; message?: string };

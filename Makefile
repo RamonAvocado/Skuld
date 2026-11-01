@@ -1,5 +1,5 @@
-dev-up:
-	sudo docker compose -f docker/docker-compose.dev.yaml up -d
+dev-recreate:
+	sudo docker compose -f docker/docker-compose.dev.yaml up --force-recreate -d
 
 dev-build:
 	sudo docker compose -f docker/docker-compose.dev.yaml up --build -d

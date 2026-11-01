@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db, getProject } from "./db";
 import { runProject } from "./run";
-import { runPerf } from "./perf";
+import { perfStatus, runPerf } from "./perf";
 import type { PerfKind } from "./db";
 
 function str(fd: FormData, k: string): string {
@@ -311,9 +311,18 @@ export async function deletePerfEntry(fd: FormData) {
   revalidatePath(PROJECT_PAGE, "page");
 }
 
+// Starts the run and returns at once; the page polls perfStatus for progress and the outcome.
+// runPerf's checks run before its first await, so a run that couldn't start has no progress yet.
 export async function runPerfAction(fd: FormData): Promise<void> {
   const id = int(fd, "id");
-  const res = await runPerf(id, perfKind(fd));
+  const kind = perfKind(fd);
+  const run = runPerf(id, kind);
+  if (perfStatus(id, kind).progress) {
+    run.catch(() => {}); // failures are kept in perfStatus().error
+    revalidatePath(PROJECT_PAGE, "page");
+    return;
+  }
+  const res = await run;
   revalidatePath(PROJECT_PAGE, "page");
   if (!res.ok) redirect(`${projectUrl(id)}?tab=${perfTab(fd)}&err=${encodeURIComponent(res.error.slice(0, 300))}`);
 }
