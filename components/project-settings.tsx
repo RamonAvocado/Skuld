@@ -13,6 +13,7 @@ import {
   updateSuite,
   deleteSuite,
   updatePageSettings,
+  createArea,
 } from "@/lib/actions";
 import type { Suite } from "@/lib/db";
 import { DEFAULT_SITESPEED_COMMAND } from "@/lib/presets";
@@ -29,7 +30,7 @@ import { Switch } from "@mimird/ui/components/switch";
 // Each value is the URL fragment that opens it, as in Mimird-Web's settings.
 const SECTIONS = [
   { value: "settings/general", label: "General", icon: SettingsIcon },
-  { value: "settings/suites", label: "Test suites", icon: FlaskConicalIcon },
+  { value: "settings/suites", label: "Tests", icon: FlaskConicalIcon },
   { value: "settings/performance", label: "Performance", icon: GaugeIcon },
 ] as const;
 
@@ -136,6 +137,20 @@ export function ProjectSettings({
           </TabsContent>
 
           <TabsContent value="settings/suites" className={PANEL_CLASS}>
+            <form action={createArea} className="flex items-end gap-2">
+              <input type="hidden" name="project_id" value={projectId} />
+              <div className="grid gap-1.5">
+                <Label htmlFor="area-name">New group</Label>
+                <Input id="area-name" name="name" placeholder="Auth, Listing, Billing…" className="w-64" required />
+              </div>
+              <Button type="submit" size="sm" variant="outline">
+                Add Group
+              </Button>
+            </form>
+
+            <Separator />
+
+            <h4 className="font-medium">Suites</h4>
             {suites.length === 0 && <p className="text-muted-foreground">No suites yet.</p>}
             {suites.map((suite) => (
               <details key={suite.id} className={detailsCls}>

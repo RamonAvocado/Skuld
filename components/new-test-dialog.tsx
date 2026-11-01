@@ -30,7 +30,7 @@ export function NewTestDialog({
         );
         // a disabled button gets no pointer events, so the hint sits on a wrapper
         return areas.length === 0 ? (
-          <Hint label="Add an area first">
+          <Hint label="Add a group first in Settings → Tests">
             <span tabIndex={0}>{button}</span>
           </Hint>
         ) : (

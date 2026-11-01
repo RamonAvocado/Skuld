@@ -20,7 +20,6 @@ import {
   listSuites,
 } from "@/lib/db";
 import {
-  createArea,
   togglePlannedStatus,
   deletePlannedTest,
 } from "@/lib/actions";
@@ -40,8 +39,6 @@ import { UrlTabs } from "@/components/url-tabs";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@mimird/ui/components/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@mimird/ui/components/card";
 import { Button } from "@mimird/ui/components/button";
-import { Input } from "@mimird/ui/components/input";
-import { Label } from "@mimird/ui/components/label";
 import { Badge } from "@mimird/ui/components/badge";
 
 export const dynamic = "force-dynamic";
@@ -345,16 +342,6 @@ export default async function ProjectPage({
             );
           })}
 
-          <form action={createArea} className="flex items-end gap-2">
-            <input type="hidden" name="project_id" value={projectId} />
-            <div className="grid gap-1.5">
-              <Label htmlFor="area-name">New area</Label>
-              <Input id="area-name" name="name" placeholder="Auth, Listing, Billing…" className="w-64" required />
-            </div>
-            <Button type="submit" variant="outline">
-              Add Area
-            </Button>
-          </form>
           <Card>
             <CardHeader>
               <CardTitle>Evolution by group</CardTitle>
