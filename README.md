@@ -1,61 +1,135 @@
-# Skuld
+<p align="center">
+  <img src="app/icon.svg" width="72" alt="Skuld logo">
+</p>
 
-Run another project's test suite, inventory its tests, track coverage and
-endpoint/page performance over time.
+<h1 align="center">Skuld</h1>
 
-## Run
+<p align="center"><em>What shall be.</em> A self-hosted dashboard for test plans, coverage and performance.</p>
+
+<p align="center">
+  <a href="docs/index.md">User guide</a> ·
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#cli">CLI</a> ·
+  <a href="docker/README.md">Docker image</a>
+</p>
+
+---
+
+Point Skuld at a checkout of any project. It runs that project's test suites, reads
+their reports, and tracks results over time: which tests exist, which are still
+planned, how coverage moves, and how fast your endpoints and pages respond.
+
+## Features
+
+- **Test plan.** Group planned tests by feature area, mark them done, and link each
+  one to a real test found in your suite. Whatever is still `todo` is your backlog.
+- **Any test framework.** Skuld reads **JUnit XML** for results and **Cobertura XML or
+  lcov** for coverage. It has presets for pytest, Bun test and Playwright, and accepts
+  any command that writes those files.
+- **History.** Every run is stored, with pass/fail counts, line and branch coverage,
+  per-file coverage and a chart of how it changes.
+- **Endpoint performance.** Times your `GET` endpoints (10 samples after a warm-up)
+  and reports median, p95, TTFB and payload size. It can log in first and use a bearer token.
+- **Page performance.** Loads your pages in headless Chromium through
+  [sitespeed.io](https://www.sitespeed.io/) and records onLoad, FCP, LCP, requests and
+  transfer size, either logged in or as a visitor.
+- **Scriptable.** The `skuld` CLI handles anything you'd otherwise click through.
+- **Single file.** All data lives in one SQLite database. There is no external service to run.
+
+## Quick start
+
+### Docker (recommended)
+
+```bash
+docker run -d --name skuld -p 3003:3003 \
+  -e SESSION_SECRET="$(openssl rand -hex 32)" \
+  -e APP_URL=http://localhost:3003 \
+  -v skuld-data:/data \
+  -v /home/me/repos/my-api:/home/me/repos/my-api \
+  ramonavocado/skuld:latest
+```
+
+Open <http://localhost:3003>. Mount each project you want to test **at the same path
+inside the container**. See [docker/README.md](docker/README.md) for every option.
+
+### From source
+
+Requires [Bun](https://bun.sh) 1.4+.
 
 ```bash
 bun install
-bun run dev        # http://localhost:3000
+bun run dev          # http://localhost:3003
 ```
 
-SQLite lives in `./skuld.db` (override with `SKULD_DB`). Schema is created on first boot.
+In development, sign up at `/signup`. The verification code is printed in the server log.
 
-Sign-in comes from `@mimird/auth`, with users stored in the same SQLite file (`kv` table).
-In dev, sign up at `/signup`; the verification code is printed in the server log.
-Its cookies are `skuld_*` (`AUTH_COOKIE_PREFIX`, set in `next.config.ts`), so other
-@mimird/auth apps on the same host don't share the session. In production set
-`SESSION_SECRET` (32+ chars, different from every other app's) and `APP_URL`. Google/GitHub login is
-optional (`GOOGLE_CLIENT_ID`/`_SECRET`, `GITHUB_CLIENT_ID`/`_SECRET`).
+## Your first project
 
-`@mimird/ui` and `@mimird/auth` come from npm, pinned to exact versions.
+1. Click **Add project**, then enter a name and the **absolute path** to the checkout.
+2. Add a **test suite**. Pick a language and framework to fill in the command, for
+   example for pytest:
+   ```bash
+   pytest --junitxml=.skuld/pytest-junit.xml --cov --cov-report=xml:.skuld/pytest-coverage.xml
+   ```
+3. Click **Run tests**. Skuld runs the command in the project directory, parses the
+   reports and stores the run.
 
-## Use
-
-1. **Add project**: absolute path + a test command that emits **JUnit XML** and
-   **Cobertura `coverage.xml`**. For pytest:
-   `pytest --junitxml=.skuld/junit.xml --cov --cov-report=xml:.skuld/coverage.xml`
-   Any framework works if it can produce those two files. No setup step —
-   just point it at a checkout.
-2. **Run tests** (Tests tab): executes each suite in the project dir, parses the reports and
-   stores a run. The run history sits under the button.
-3. **Tests**: group planned tests by feature area (Auth, Listing…), mark them
-   done, link each to a real discovered test. The TODO list = everything still `todo`.
-4. **Overview**: test tiles + coverage/test-count chart, and the latest endpoint/page
-   performance numbers. Tabs are in the URL: `?tab=test`, `?tab=performance`. Project URLs use the project's uuid.
+The [user guide](docs/index.md) covers test plans, performance tracking and the CLI in detail.
 
 ## CLI
 
-`bun run skuld help` lists, adds and re-categorizes planned tests, areas and performance
-entries straight in the db (same `SKULD_DB`). Refresh the page to see changes.
-
 ```bash
-bun run skuld projects
-bun run skuld run my-api
+bun run skuld help                                              # all commands
+bun run skuld projects                                          # list projects
+bun run skuld run my-api                                        # run every suite
 bun run skuld tests add my-api Auth --layer e2e "rejects expired token" "logs out"
-bun run skuld tests move Billing 12 13
 bun run skuld perf add my-api endpoint --area Usage /api/v1/usage /api/v1/limits
 ```
 
-## Checks
+The CLI writes to the same database as the web app (`SKULD_DB`). Refresh the page to see changes.
+
+## Configuration
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `SKULD_DB` | `./skuld.db` (`/data/skuld.db` in Docker) | SQLite database path |
+| `APP_ENV` | `dev` | `dev`, `docker` or `production` |
+| `SESSION_SECRET` | none | **Required in production.** 32+ chars, unique per app |
+| `APP_URL` | `http://localhost:3000` | **Required in production.** Public URL, used for OAuth redirects |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | none | Optional Google sign-in |
+| `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | none | Optional GitHub sign-in |
+
+## Development
 
 ```bash
-bun test lib/parse.test.ts   # JUnit + Cobertura parsers
-bun scripts/selftest.ts      # run pipeline + CLI (no pytest needed)
+bun test                     # unit tests (parsers, db, perf, presets)
+bun scripts/selftest.ts      # run pipeline + CLI end to end (no pytest needed)
+make dev-build               # dev container with hot reload on :23003
 ```
 
-## Known ceilings
+Built with Next.js, React, Tailwind and `bun:sqlite`. Sign-in comes from
+[`@mimird/auth`](https://www.npmjs.com/package/@mimird/auth). Its session cookies use the
+`skuld_` prefix, so other Mimird apps on the same host don't share the session.
+Design rules are in [DESIGN.md](DESIGN.md).
 
-- A run is a blocking server action (20-min exec timeout). Add a job queue if suites get slower.
-- planned↔discovered linking is manual.
+### Release a Docker image
+
+```bash
+VERSION=$(jq -r .version package.json)
+docker build -f docker/Dockerfile --build-arg VERSION=$VERSION \
+  -t ramonavocado/skuld:$VERSION -t ramonavocado/skuld:latest .
+docker push ramonavocado/skuld:$VERSION && docker push ramonavocado/skuld:latest
+```
+
+Paste [docker/README.md](docker/README.md) into the repository overview on Docker Hub.
+
+## Known limits
+
+- A run is a blocking request, and each suite has a 20-minute timeout. Very slow suites need a job queue.
+- New tests are auto-imported, but linking a test you planned in advance to its real test is manual.
+- Login for performance runs expects a JSON `{ email, password }` API answering
+  `{ token }` and an HTML form with `email` and `password` fields.
+
+## License
+
+See [LICENSE](LICENSE).
