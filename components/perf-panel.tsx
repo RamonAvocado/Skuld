@@ -1,19 +1,18 @@
-import { ExternalLinkIcon } from "lucide-react";
+import { ExternalLinkIcon, LockIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getProject, listPerfEntries, listPerfRuns, perfResultsForRun, perfSeries, type PerfKind, type PerfResult } from "@/lib/db";
-import { createPerfEntry, deletePerfEntry, runPerfAction, updateEndpointSettings } from "@/lib/actions";
+import { runPerfAction, updatePerfSettings } from "@/lib/actions";
 import { parseVars, pathVars } from "@/lib/perf";
 import { Field } from "@/components/project-settings";
 import { Textarea } from "@mimird/ui/components/textarea";
 import { Label } from "@mimird/ui/components/label";
 import { RunButton } from "@/components/run-button";
 import { PerfChart } from "@/components/perf-chart";
-import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { Chevron, detailsCls, summaryCls } from "@/components/disclosure";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@mimird/ui/components/card";
 import { Button } from "@mimird/ui/components/button";
-import { Input } from "@mimird/ui/components/input";
 import { Badge } from "@mimird/ui/components/badge";
+import { PerfEntryDialog } from "@/components/perf-entry-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@mimird/ui/components/table";
 
 export function ms(n: number) {
@@ -46,11 +45,10 @@ export function PerfPanel({ projectId, kind }: { projectId: number; kind: PerfKi
   const series = perfSeries(projectId, kind);
   const isPage = kind === "page";
   const noun = isPage ? "page" : "endpoint";
-  const Noun = isPage ? "Page" : "Endpoint";
 
   return (
     <div className="grid gap-4">
-      {!isPage && <RunSettings projectId={projectId} paths={entries.map((e) => e.path)} />}
+      <RunSettings projectId={projectId} kind={kind} />
       <Card>
         <CardHeader>
           <CardTitle>
@@ -97,6 +95,9 @@ export function PerfPanel({ projectId, kind }: { projectId: number; kind: PerfKi
             {isPage ? "Pages" : "Endpoints"}{" "}
             <span className="text-sm font-normal text-muted-foreground tabular-nums">{entries.length}</span>
           </CardTitle>
+          <CardAction>
+            <PerfEntryDialog projectId={projectId} kind={kind} />
+          </CardAction>
         </CardHeader>
         <CardContent className="grid gap-3">
           {entries.length === 0 && <p className="text-sm text-muted-foreground">No {noun}s yet.</p>}
@@ -104,64 +105,48 @@ export function PerfPanel({ projectId, kind }: { projectId: number; kind: PerfKi
             const latest = latestByEntry.get(e.id);
             return (
               <details key={e.id} className={detailsCls} suppressHydrationWarning>
-                <summary className={summaryCls}>
+                <summary className={cn(summaryCls, "group/entry")}>
                   <Chevron />
+                  {isPage && e.login === 1 && (
+                    <LockIcon className="size-3.5 shrink-0 text-muted-foreground" role="img" aria-label="Needs login" />
+                  )}
                   {e.area && <Badge variant="outline">{e.area}</Badge>}
                   <span className="min-w-0 font-mono text-xs break-all">
                     {!isPage && <span className="text-muted-foreground">{e.method} </span>}
                     {e.path}
                     {e.body && <span className="text-muted-foreground"> · body</span>}
                   </span>
-                  {latest && (
-                    <span className="ml-auto shrink-0 text-muted-foreground tabular-nums">
-                      <span className={cn("font-medium", failing(latest) ? "text-destructive" : "text-foreground")}>
-                        {ms(latest.ms)}
-                      </span>{" "}
-                      {!isPage && <> · p95 {ms(latest.p95)}</>} · {size(latest.bytes)} · {delta(latest.ms, before.get(e.id))}
+                  <span className="ml-auto flex shrink-0 items-center gap-1">
+                    {latest && (
+                      <span className="text-muted-foreground tabular-nums">
+                        <span className={cn("font-medium", failing(latest) ? "text-destructive" : "text-foreground")}>
+                          {ms(latest.ms)}
+                        </span>{" "}
+                        {!isPage && <> · p95 {ms(latest.p95)}</>} · {size(latest.bytes)} · {delta(latest.ms, before.get(e.id))}
+                      </span>
+                    )}
+                    {/* Shown on hover or keyboard focus; always on touch screens, which can't hover. */}
+                    <span className="flex opacity-0 transition-opacity group-hover/entry:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
+                      <PerfEntryDialog
+                        projectId={projectId}
+                        kind={kind}
+                        entry={{ id: e.id, path: e.path, area: e.area, login: e.login }}
+                      />
                     </span>
-                  )}
+                  </span>
                 </summary>
                 <div className="mt-3 grid gap-3">
                   <PerfChart data={series.get(e.id) ?? []} isPage={isPage} />
-                  <div className="flex items-center gap-3">
-                    {latest?.report_path && (
-                      <a className="link-subtle text-sm" href={`/perf-report/${latest.report_path}`} target="_blank" rel="noreferrer">
-                        Latest report
-                      </a>
-                    )}
-                    <form action={deletePerfEntry} className="ml-auto">
-                      <input type="hidden" name="id" value={e.id} />
-                      <input type="hidden" name="project_id" value={projectId} />
-                      <ConfirmSubmitButton
-                        size="sm"
-                        variant="ghost"
-                        confirmTitle={`Delete ${e.path}?`}
-                        confirmMessage="Past results stay in run history."
-                      >
-                        Delete {Noun}
-                      </ConfirmSubmitButton>
-                    </form>
-                  </div>
+                  {latest?.report_path && (
+                    <a className="link-subtle w-fit text-sm" href={`/perf-report/${latest.report_path}`} target="_blank" rel="noreferrer">
+                      Latest report
+                    </a>
+                  )}
                 </div>
               </details>
             );
           })}
 
-          <form action={createPerfEntry} className="flex flex-wrap items-end gap-2">
-            <input type="hidden" name="project_id" value={projectId} />
-            <input type="hidden" name="kind" value={kind} />
-            <Input
-              name="path"
-              aria-label="Path"
-              placeholder={isPage ? "/pricing" : "/api/v1/u/{userId}/usage"}
-              className="w-72 font-mono text-sm"
-              required
-            />
-            <Input name="area" aria-label="Area" placeholder="Area (optional)" className="w-40" />
-            <Button type="submit" variant="outline">
-              Add {Noun}
-            </Button>
-          </form>
         </CardContent>
       </Card>
 
@@ -203,17 +188,20 @@ export function PerfPanel({ projectId, kind }: { projectId: number; kind: PerfKi
   );
 }
 
-// Who Skuld logs in as, and the values for every {placeholder} in the endpoint paths.
-function RunSettings({ projectId, paths }: { projectId: number; paths: string[] }) {
+// Who Skuld logs in as, and the values for every {placeholder} in endpoint and page paths.
+// Both tabs show the same form: one login and one set of variables per project.
+function RunSettings({ projectId, kind }: { projectId: number; kind: PerfKind }) {
   const project = getProject(projectId)!;
   const stored = parseVars(project.perf_vars);
+  const paths = [...listPerfEntries(projectId, "endpoint"), ...listPerfEntries(projectId, "page")].map((e) => e.path);
   const used = [...new Set(paths.flatMap(pathVars))].filter((v) => v !== "userId").sort();
   // Every variable the paths use shows up, empty until filled in.
   const vars: Record<string, string> = { ...Object.fromEntries(used.map((v) => [v, ""])), ...stored };
   const json = JSON.stringify(vars, null, 2);
   const missing = used.filter((v) => !vars[v]);
+  const unset = kind === "page" ? !project.site_url : !project.api_base_url;
   return (
-    <details className={detailsCls} open={!project.api_base_url || undefined} suppressHydrationWarning>
+    <details className={detailsCls} open={unset || undefined} suppressHydrationWarning>
       <summary className={summaryCls}>
         <Chevron />
         <span className="font-medium">Run settings</span>
@@ -222,11 +210,10 @@ function RunSettings({ projectId, paths }: { projectId: number; paths: string[] 
           {missing.length > 0 && <span className="text-destructive"> · {missing.length} variables without a value</span>}
         </span>
       </summary>
-      <form action={updateEndpointSettings} className="mt-3 grid gap-3 md:grid-cols-2">
+      <form action={updatePerfSettings} className="mt-3 grid gap-3 md:grid-cols-2">
         <input type="hidden" name="id" value={projectId} />
+        <input type="hidden" name="kind" value={kind} />
         <div className="grid content-start gap-3">
-          <Field name="api_base_url" label="API base URL" defaultValue={project.api_base_url} placeholder="http://localhost:8000" mono />
-          <Field name="login_path" label="Login path" defaultValue={project.login_path} mono />
           <Field name="login_email" label="Login email" defaultValue={project.login_email} />
           <Field
             name="login_password"
@@ -235,12 +222,18 @@ function RunSettings({ projectId, paths }: { projectId: number; paths: string[] 
             type="password"
             placeholder={project.login_password ? "Saved — leave empty to keep" : ""}
           />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field name="api_base_url" label="API base URL" defaultValue={project.api_base_url} placeholder="http://localhost:8000" mono />
+            <Field name="login_path" label="API login path" defaultValue={project.login_path} mono />
+            <Field name="site_url" label="Site URL" defaultValue={project.site_url} placeholder="http://localhost:3000" mono />
+            <Field name="site_login_path" label="Site login page" defaultValue={project.site_login_path} mono />
+          </div>
         </div>
         <div className="grid content-start gap-1.5">
-          <Label htmlFor="perf-vars">Variables (JSON)</Label>
+          <Label htmlFor={`perf-vars-${kind}`}>Variables (JSON)</Label>
           <Textarea
             key={json}
-            id="perf-vars"
+            id={`perf-vars-${kind}`}
             name="perf_vars"
             defaultValue={json}
             rows={Math.min(Math.max(used.length + 2, 6), 20)}

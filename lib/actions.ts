@@ -233,21 +233,31 @@ function perfKind(fd: FormData): PerfKind {
   return str(fd, "kind") === "page" ? "page" : "endpoint";
 }
 
-export async function updateEndpointSettings(fd: FormData) {
+/** The project tab that lists this kind of entry. */
+function perfTab(fd: FormData): string {
+  return perfKind(fd) === "page" ? "pages" : "endpoints";
+}
+
+export async function updatePerfSettings(fd: FormData) {
   const id = int(fd, "id");
+  const tab = perfTab(fd);
   let vars: unknown;
   try {
     vars = JSON.parse(str(fd, "perf_vars") || "{}");
   } catch (e) {
-    redirect(`${projectUrl(id)}?tab=performance&err=${encodeURIComponent(`Variables aren't valid JSON: ${(e as Error).message}`)}`);
+    redirect(`${projectUrl(id)}?tab=${tab}&err=${encodeURIComponent(`Variables aren't valid JSON: ${(e as Error).message}`)}`);
   }
   const ok =
     vars && typeof vars === "object" && !Array.isArray(vars) &&
     Object.values(vars).every((v) => typeof v === "string" || typeof v === "number");
-  if (!ok) redirect(`${projectUrl(id)}?tab=performance&err=${encodeURIComponent('Variables must be a JSON object of strings or numbers, like {"strategy_id": "42"}')}`);
-  db.prepare(`UPDATE projects SET api_base_url = ?, login_path = ?, login_email = ?, perf_vars = ? WHERE id = ?`).run(
+  if (!ok) redirect(`${projectUrl(id)}?tab=${tab}&err=${encodeURIComponent('Variables must be a JSON object of strings or numbers, like {"strategy_id": "42"}')}`);
+  db.prepare(
+    `UPDATE projects SET api_base_url = ?, login_path = ?, site_url = ?, site_login_path = ?, login_email = ?, perf_vars = ? WHERE id = ?`,
+  ).run(
     str(fd, "api_base_url"),
     str(fd, "login_path") || "/api/v1/auth/login",
+    str(fd, "site_url"),
+    str(fd, "site_login_path") || "/login",
     str(fd, "login_email"),
     JSON.stringify(vars, null, 2),
     id,
@@ -259,9 +269,7 @@ export async function updateEndpointSettings(fd: FormData) {
 }
 
 export async function updatePageSettings(fd: FormData) {
-  db.prepare(`UPDATE projects SET site_url = ?, site_cookie = ?, sitespeed_command = ? WHERE id = ?`).run(
-    str(fd, "site_url"),
-    str(fd, "site_cookie"),
+  db.prepare(`UPDATE projects SET sitespeed_command = ? WHERE id = ?`).run(
     str(fd, "sitespeed_command"),
     int(fd, "id"),
   );
@@ -272,13 +280,27 @@ export async function createPerfEntry(fd: FormData) {
   const project_id = int(fd, "project_id");
   const path = str(fd, "path");
   if (!path) return;
-  db.prepare("INSERT INTO perf_entries (project_id, kind, method, path, body, area) VALUES (?, ?, ?, ?, ?, ?)").run(
+  db.prepare("INSERT INTO perf_entries (project_id, kind, method, path, body, area, login) VALUES (?, ?, ?, ?, ?, ?, ?)").run(
     project_id,
     perfKind(fd),
     (str(fd, "method") || "GET").toUpperCase(),
     path,
     str(fd, "body"),
     str(fd, "area"),
+    fd.get("login") ? 1 : 0,
+  );
+  revalidatePath(PROJECT_PAGE, "page");
+}
+
+export async function updatePerfEntry(fd: FormData) {
+  const path = str(fd, "path");
+  if (!path) return;
+  db.prepare("UPDATE perf_entries SET path = ?, area = ?, login = ? WHERE id = ?").run(
+    path,
+    str(fd, "area"),
+    // Endpoints have no login checkbox; they always send the token.
+    perfKind(fd) === "endpoint" || fd.get("login") ? 1 : 0,
+    int(fd, "id"),
   );
   revalidatePath(PROJECT_PAGE, "page");
 }
@@ -293,5 +315,5 @@ export async function runPerfAction(fd: FormData): Promise<void> {
   const id = int(fd, "id");
   const res = await runPerf(id, perfKind(fd));
   revalidatePath(PROJECT_PAGE, "page");
-  if (!res.ok) redirect(`${projectUrl(id)}?tab=performance&err=${encodeURIComponent(res.error.slice(0, 300))}`);
+  if (!res.ok) redirect(`${projectUrl(id)}?tab=${perfTab(fd)}&err=${encodeURIComponent(res.error.slice(0, 300))}`);
 }

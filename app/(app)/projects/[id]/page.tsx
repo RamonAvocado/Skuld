@@ -36,7 +36,7 @@ import { EvolutionChart, GroupEvolutionChart } from "@/components/evolution-char
 import { ErrToast } from "@/components/err-toast";
 import { PerfPanel, ms, delta } from "@/components/perf-panel";
 import { UrlTabs } from "@/components/url-tabs";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@mimird/ui/components/tabs";
+import { TabsContent, TabsList, TabsTrigger } from "@mimird/ui/components/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@mimird/ui/components/card";
 import { Button } from "@mimird/ui/components/button";
 import { Badge } from "@mimird/ui/components/badge";
@@ -80,7 +80,14 @@ export default async function ProjectPage({
   const suites = listSuites(projectId).map((s) => ({ ...s }));
   const tests = project.enable_tests === 1;
   const perf = project.enable_perf === 1;
-  const activeTab = tab === "test" && tests ? "test" : tab === "performance" && perf ? "performance" : "overview";
+  const activeTab =
+    tab === "test" && tests
+      ? "test"
+      : (tab === "endpoints" || tab === "performance") && perf
+        ? "endpoints"
+        : tab === "pages" && perf
+          ? "pages"
+          : "overview";
 
   return (
     <div className="grid gap-6">
@@ -104,8 +111,6 @@ export default async function ProjectPage({
               root_dir: project.root_dir,
               enable_tests: project.enable_tests,
               enable_perf: project.enable_perf,
-              site_url: project.site_url,
-              site_cookie: project.site_cookie,
               sitespeed_command: project.sitespeed_command,
             }}
             suites={suites}
@@ -118,26 +123,21 @@ export default async function ProjectPage({
           <TabsList>
             <TabsTrigger value="overview">Overview</TabsTrigger>
             {tests && <TabsTrigger value="test">Tests</TabsTrigger>}
-            {perf && <TabsTrigger value="performance">Performance</TabsTrigger>}
+            {perf && <TabsTrigger value="endpoints">Endpoints</TabsTrigger>}
+            {perf && <TabsTrigger value="pages">Pages</TabsTrigger>}
           </TabsList>
         </div>
 
         {/* -------- Performance -------- */}
         {perf && (
-          <TabsContent value="performance" className="pt-4">
-            <Tabs defaultValue="endpoint">
-              <TabsList>
-                <TabsTrigger value="endpoint">Endpoints</TabsTrigger>
-                <TabsTrigger value="page">Pages</TabsTrigger>
-              </TabsList>
-              <TabsContent value="endpoint" className="pt-2">
-                <PerfPanel projectId={projectId} kind="endpoint" />
-              </TabsContent>
-              <TabsContent value="page" className="pt-2">
-                <PerfPanel projectId={projectId} kind="page" />
-              </TabsContent>
-            </Tabs>
-          </TabsContent>
+          <>
+            <TabsContent value="endpoints" className="pt-4">
+              <PerfPanel projectId={projectId} kind="endpoint" />
+            </TabsContent>
+            <TabsContent value="pages" className="pt-4">
+              <PerfPanel projectId={projectId} kind="page" />
+            </TabsContent>
+          </>
         )}
 
         {/* -------- Overview -------- */}

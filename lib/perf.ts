@@ -146,19 +146,53 @@ async function measureEndpoints(project: Project, entries: PerfEntry[]): Promise
 
 // --- pages: sitespeed.io loads them in a real browser ------------------------------
 
-function shellQuote(s: string): string {
-  return `'${s.replaceAll("'", `'\\''`)}'`;
+/**
+ * The browsertime script for a page run: public pages first, then the site's
+ * login form, then the pages that need login (the session lives for the iteration).
+ */
+export function pagesScript(publicUrls: string[], privateUrls: string[], login: { url: string; email: string; password: string }): string {
+  const j = JSON.stringify;
+  return `module.exports = async (context, commands) => {
+  for (const url of ${j(publicUrls)}) await commands.measure.start(url);
+  const privateUrls = ${j(privateUrls)};
+  if (privateUrls.length === 0) return;
+  // ponytail: Mimird's login form (name="email", name="password", submit button); make these settings for other sites.
+  await commands.navigate(${j(login.url)});
+  await commands.addText.byName(${j(login.email)}, "email");
+  await commands.addText.byName(${j(login.password)}, "password");
+  await commands.click.bySelectorAndWait("button[type=submit]");
+  for (const url of privateUrls) await commands.measure.start(url);
+};
+`;
 }
 
 async function measurePages(project: Project, entries: PerfEntry[], started_at: string): Promise<Measured> {
-  if (!project.site_url) return { error: "set the site URL in Settings → Performance" };
+  if (!project.site_url) return { error: "set the site URL in Run settings" };
+  const vars = parseVars(project.perf_vars);
+  const urls = new Map<number, string>();
+  const missing = new Map<number, string>();
+  for (const e of entries) {
+    const filled = fillPath(e.path, vars);
+    if ("missing" in filled) missing.set(e.id, `no value for ${filled.missing.map((v) => `{${v}}`).join(", ")}`);
+    else urls.set(e.id, joinUrl(project.site_url, filled.path));
+  }
+  const measured = entries.filter((e) => urls.has(e.id));
+  if (measured.length === 0) return { error: "no page has values for all its {variables} — fill them in Run settings" };
+  const privateUrls = measured.filter((e) => e.login).map((e) => urls.get(e.id)!);
+  if (privateUrls.length > 0 && !project.login_email) return { error: "some pages need login: set the login email in Run settings" };
+
   const reportDir = `${project.id}-${started_at.replace(/[:.]/g, "-")}`;
   const cwd = join(REPORTS_DIR, reportDir);
   await mkdir(cwd, { recursive: true });
-  await writeFile(join(cwd, "urls.txt"), entries.map((e) => joinUrl(project.site_url, e.path)).join("\n") + "\n");
+  const script = pagesScript(
+    measured.filter((e) => !e.login).map((e) => urls.get(e.id)!),
+    privateUrls,
+    { url: joinUrl(project.site_url, project.site_login_path || "/login"), email: project.login_email, password: project.login_password },
+  );
+  await writeFile(join(cwd, "pages.cjs"), script);
 
-  let cmd = project.sitespeed_command || DEFAULT_SITESPEED_COMMAND;
-  if (project.site_cookie) cmd += ` --cookie ${shellQuote(project.site_cookie)}`;
+  // Commands saved before scripted runs still name urls.txt.
+  const cmd = (project.sitespeed_command || DEFAULT_SITESPEED_COMMAND).replace(/\burls\.txt\b/, "pages.cjs --multi");
   // Skuld's own node_modules/.bin first, so the bundled sitespeed.io is found.
   const PATH = `${join(process.cwd(), "node_modules", ".bin")}:${process.env.PATH ?? ""}`;
   const shell = await sh(cmd, cwd, { ...process.env, PATH });
@@ -176,12 +210,14 @@ async function measurePages(project: Project, entries: PerfEntry[], started_at: 
   }
   if (pages.size === 0) return { error: `sitespeed.io exited ${shell.code} without a report\n${shell.out.slice(-2000)}` };
 
+  const failed = (entry: PerfEntry, error: string): Result => ({ entry, status: 0, ms: 0, p95: 0, ttfb: 0, bytes: 0, requests: 0, fcp: 0, lcp: 0, error, reportPath: "" });
   const results: Result[] = entries.map((entry) => {
-    const url = joinUrl(project.site_url, entry.path);
+    const url = urls.get(entry.id);
+    if (!url) return failed(entry, missing.get(entry.id)!);
     const p = pages.get(url) ?? pages.get(url.replace(/\/$/, "")) ?? pages.get(`${url}/`);
     return p
       ? { entry, status: p.status, ms: p.ms, p95: 0, ttfb: p.ttfb, bytes: p.bytes, requests: p.requests, fcp: p.fcp, lcp: p.lcp, error: "", reportPath: p.reportPath }
-      : { entry, status: 0, ms: 0, p95: 0, ttfb: 0, bytes: 0, requests: 0, fcp: 0, lcp: 0, error: "missing from the sitespeed.io report", reportPath: "" };
+      : failed(entry, "missing from the sitespeed.io report");
   });
   return { results, reportDir, log: shell.out.slice(-20000) };
 }

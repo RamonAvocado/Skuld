@@ -24,7 +24,9 @@ const USAGE = `skuld <command>   (<project> = uuid or name; ids come from the li
   tests link <test-id> <discovered-key>
   discovered <project> [--unlinked]
   perf <project> [endpoint|page] [--area A]
-  perf add <project> endpoint|page [--area A] <path>...   (endpoints are GET only: runs never write)
+  perf add <project> endpoint|page [--area A] [--public] <path>...   (endpoints are GET only: runs never write;
+                                                                    pages need login unless --public)
+  perf login|public <entry-id>...                                   (pages: measure logged in or out)
   perf area <area> <entry-id>...
   perf rm <entry-id>...`;
 
@@ -35,6 +37,7 @@ const { values: opt, positionals } = parseArgs({
     layer: { type: "string", default: "unit" },
     todo: { type: "boolean" },
     unlinked: { type: "boolean" },
+    public: { type: "boolean" },
   },
 });
 
@@ -190,11 +193,13 @@ switch (cmd) {
       const kind = rest[1];
       if (kind !== "endpoint" && kind !== "page") die(USAGE);
       const insert = db.prepare(
-        "INSERT INTO perf_entries (project_id, kind, method, path, area) VALUES (?, ?, 'GET', ?, ?)",
+        "INSERT INTO perf_entries (project_id, kind, method, path, area, login) VALUES (?, ?, 'GET', ?, ?, ?)",
       );
       for (const path of rest.slice(2)) {
-        console.log(insert.run(p.id, kind, path, opt.area ?? "").lastInsertRowid, path);
+        console.log(insert.run(p.id, kind, path, opt.area ?? "", opt.public ? 0 : 1).lastInsertRowid, path);
       }
+    } else if (sub === "login" || sub === "public") {
+      for (const id of ids(rest)) db.prepare("UPDATE perf_entries SET login = ? WHERE id = ?").run(sub === "login" ? 1 : 0, id);
     } else if (sub === "area") {
       const name = rest[0] ?? die(USAGE);
       for (const id of ids(rest.slice(1))) db.prepare("UPDATE perf_entries SET area = ? WHERE id = ?").run(name, id);
@@ -206,12 +211,12 @@ switch (cmd) {
       print(
         db
           .prepare(
-            `SELECT id, kind, area, method, path FROM perf_entries
+            `SELECT id, kind, area, method, login, path FROM perf_entries
              WHERE project_id = ? AND (? IS NULL OR kind = ?) AND (? IS NULL OR area = ?)
              ORDER BY kind, area, path, id`,
           )
           .all(p.id, kind, kind, opt.area ?? null, opt.area ?? null)
-          .map((r: any) => [r.id, r.kind, r.area, r.kind === "page" ? "" : r.method, r.path]),
+          .map((r: any) => [r.id, r.kind, r.area, r.kind === "page" ? (r.login ? "login" : "public") : r.method, r.path]),
       );
     }
     break;

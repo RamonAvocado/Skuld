@@ -181,7 +181,9 @@ function open(): DatabaseSync {
     "site_url TEXT NOT NULL DEFAULT ''",
     "site_cookie TEXT NOT NULL DEFAULT ''",
     "sitespeed_command TEXT NOT NULL DEFAULT ''",
-    // JSON object of values for {placeholders} in endpoint paths.
+    // The site's own login form, used before measuring pages that need login.
+    "site_login_path TEXT NOT NULL DEFAULT '/login'",
+    // JSON object of values for {placeholders} in endpoint and page paths.
     "perf_vars TEXT NOT NULL DEFAULT '{}'",
   ]) {
     try {
@@ -208,6 +210,12 @@ function open(): DatabaseSync {
     } catch {
       /* column already exists */
     }
+  }
+  // Pages only: 0 = measured logged out, 1 = measured after logging in.
+  try {
+    db.exec("ALTER TABLE perf_entries ADD COLUMN login INTEGER NOT NULL DEFAULT 1");
+  } catch {
+    /* column already exists */
   }
   // Users, sign-in codes and avatars for @mimird/auth's kvStore (instrumentation.ts).
   db.exec("CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
@@ -255,6 +263,7 @@ export type Project = {
   site_url: string;
   site_cookie: string;
   sitespeed_command: string;
+  site_login_path: string;
   perf_vars: string;
 };
 
@@ -535,6 +544,7 @@ export type PerfEntry = {
   path: string;
   body: string;
   area: string;
+  login: number;
 };
 
 export type PerfRun = {

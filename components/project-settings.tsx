@@ -40,8 +40,6 @@ export type SettingsProject = {
   root_dir: string;
   enable_tests: number;
   enable_perf: number;
-  site_url: string;
-  site_cookie: string;
   sitespeed_command: string;
 };
 
@@ -211,10 +209,7 @@ export function ProjectSettings({
           <TabsContent value="settings/performance" className={PANEL_CLASS}>
             <form action={updatePageSettings} className="flex max-w-md flex-col gap-3">
               <input type="hidden" name="id" value={projectId} />
-              <p className="text-xs text-muted-foreground">Endpoint login and variables live on the Endpoints tab.</p>
-              <h4 className="font-medium">Pages</h4>
-              <Field name="site_url" label="Site URL" defaultValue={project.site_url} placeholder="http://localhost:3000" mono />
-              <Field name="site_cookie" label="Cookie (optional)" defaultValue={project.site_cookie} placeholder="session=…" mono />
+              <p className="text-xs text-muted-foreground">URLs, login and variables live in Run settings on the Endpoints and Pages tabs.</p>
               <Field
                 name="sitespeed_command"
                 label="sitespeed.io command"
@@ -223,7 +218,8 @@ export function ProjectSettings({
                 mono
               />
               <p className="-mt-2 text-xs text-muted-foreground">
-                Runs in a fresh folder holding <code>urls.txt</code> and must write its report to{" "}
+                Runs in a fresh folder holding <code>pages.cjs</code> (a browsertime script; pass it with{" "}
+                <code>--multi</code>) and must write its report to{" "}
                 <code>report/</code>. Empty uses the bundled sitespeed.io with the system Chromium; add{" "}
                 <code>--video true</code> for filmstrips if ffmpeg is installed.
               </p>

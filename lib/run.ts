@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { readFile, mkdir } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { join, isAbsolute, dirname } from "node:path";
 import { db, getProject, listSuites, autoImportDiscoveredTests, type Project, type Suite } from "./db";
 import { parseJUnit, parseCobertura, parseLcov, type JUnitResult, type CoberturaResult } from "./parse";
@@ -79,6 +80,10 @@ export async function runProject(projectId: number): Promise<RunResult> {
   const suites = listSuites(projectId);
   if (suites.length === 0) {
     return { ok: false, error: "project has no test suites configured — add one in Settings" };
+  }
+  // In Docker the checkout only exists if docker-compose mounts it at the same path.
+  if (!existsSync(project.root_dir)) {
+    return { ok: false, error: `${project.root_dir} doesn't exist here — in Docker, mount it in docker-compose and recreate the container` };
   }
 
   const started_at = new Date().toISOString();

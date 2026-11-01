@@ -98,3 +98,25 @@ test("fillPath fills and encodes every {var}, or names the missing ones", () => 
   expect(perf.parseVars('{"a": 1, "b": null}')).toEqual({ a: "1", b: "" });
   expect(perf.parseVars("not json")).toEqual({});
 });
+
+test("pagesScript measures public pages, then logs in, then private pages", async () => {
+  const s = perf.pagesScript(["http://s/pricing"], ["http://s/watchlist/AAPL"], { url: "http://s/login", email: "a@b.c", password: 'p"w' });
+  const mod: { exports?: (context: unknown, commands: unknown) => Promise<void> } = {};
+  new Function("module", s)(mod);
+  const calls: string[] = [];
+  const log = (name: string) => async (...args: unknown[]) => void calls.push(`${name} ${args.join(" ")}`);
+  await mod.exports!({}, {
+    measure: { start: log("measure") },
+    navigate: log("navigate"),
+    addText: { byName: log("type") },
+    click: { bySelectorAndWait: log("click") },
+  });
+  expect(calls).toEqual([
+    "measure http://s/pricing",
+    "navigate http://s/login",
+    "type a@b.c email",
+    'type p"w password',
+    "click button[type=submit]",
+    "measure http://s/watchlist/AAPL",
+  ]);
+});
