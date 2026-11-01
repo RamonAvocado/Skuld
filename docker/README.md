@@ -81,13 +81,6 @@ docker run --rm -v skuld-data:/data -v "$PWD":/backup alpine \
 docker compose start
 ```
 
-**Restore** it into an empty volume:
-
-```bash
-docker run --rm -v skuld-data:/data -v "$PWD":/backup alpine \
-  tar xzf /backup/skuld-backup.tgz -C /data
-```
-
 ## Environment variables
 
 | Variable | Required | Default | Description |
